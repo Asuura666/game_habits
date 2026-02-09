@@ -1,0 +1,45 @@
+# ===========================================
+# Habit Tracker Backend - Dependencies
+# ===========================================
+
+# Core Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy[asyncio]==2.0.25
+asyncpg==0.29.0
+alembic==1.13.1
+greenlet==3.0.3
+
+# Redis & Celery
+redis==5.0.1
+celery[redis]==5.3.6
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# OAuth (optional)
+httpx==0.26.0
+authlib==1.3.0
+
+# LLM APIs
+anthropic==0.18.0
+openai==1.10.0
+
+# Monitoring & Logging
+prometheus-fastapi-instrumentator==6.1.0
+structlog==24.1.0
+
+# Utilities
+python-dateutil==2.8.2
+pytz==2024.1
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
