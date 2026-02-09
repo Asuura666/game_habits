@@ -2,218 +2,235 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Medal, Crown, Flame, Sparkles, TrendingUp } from 'lucide-react';
+import { Trophy, Medal, Flame, TrendingUp, Crown, Star } from 'lucide-react';
 import { Card, Badge } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
+import { cn } from '@/lib/utils';
+import type { LeaderboardEntry } from '@/types';
 
-const leaderboardData = {
-  xp: [
-    { rank: 1, username: 'Dragon_Master', level: 45, xp: 125000, streak: 180, avatarEmoji: '🐉' },
-    { rank: 2, username: 'ZenWarrior', level: 42, xp: 118500, streak: 150, avatarEmoji: '🧘' },
-    { rank: 3, username: 'IronWill', level: 40, xp: 112000, streak: 200, avatarEmoji: '💪' },
-    { rank: 4, username: 'StarChaser', level: 38, xp: 98000, streak: 90, avatarEmoji: '⭐' },
-    { rank: 5, username: 'MindfulMage', level: 35, xp: 89000, streak: 75, avatarEmoji: '🔮' },
-    { rank: 6, username: 'FocusKing', level: 32, xp: 78000, streak: 60, avatarEmoji: '👑' },
-    { rank: 7, username: 'HabitHero', level: 30, xp: 72000, streak: 45, avatarEmoji: '🦸' },
-    { rank: 8, username: 'DailyGrinder', level: 28, xp: 65000, streak: 120, avatarEmoji: '⚡' },
-    { rank: 9, username: 'Persistor', level: 25, xp: 58000, streak: 30, avatarEmoji: '🎯' },
-    { rank: 10, username: 'RisingStar', level: 22, xp: 50000, streak: 25, avatarEmoji: '🌟' },
-  ],
-  streak: [
-    { rank: 1, username: 'IronWill', level: 40, xp: 112000, streak: 200, avatarEmoji: '💪' },
-    { rank: 2, username: 'Dragon_Master', level: 45, xp: 125000, streak: 180, avatarEmoji: '🐉' },
-    { rank: 3, username: 'ZenWarrior', level: 42, xp: 118500, streak: 150, avatarEmoji: '🧘' },
-    { rank: 4, username: 'DailyGrinder', level: 28, xp: 65000, streak: 120, avatarEmoji: '⚡' },
-    { rank: 5, username: 'StarChaser', level: 38, xp: 98000, streak: 90, avatarEmoji: '⭐' },
-    { rank: 6, username: 'MindfulMage', level: 35, xp: 89000, streak: 75, avatarEmoji: '🔮' },
-    { rank: 7, username: 'FocusKing', level: 32, xp: 78000, streak: 60, avatarEmoji: '👑' },
-    { rank: 8, username: 'HabitHero', level: 30, xp: 72000, streak: 45, avatarEmoji: '🦸' },
-    { rank: 9, username: 'Persistor', level: 25, xp: 58000, streak: 30, avatarEmoji: '🎯' },
-    { rank: 10, username: 'RisingStar', level: 22, xp: 50000, streak: 25, avatarEmoji: '🌟' },
-  ],
+const mockLeaderboard: LeaderboardEntry[] = [
+  { rank: 1, userId: '1', username: 'LegendaryHero', level: 42, xp: 125000, streak: 180 },
+  { rank: 2, userId: '2', username: 'QuestMaster99', level: 38, xp: 98000, streak: 95 },
+  { rank: 3, userId: '3', username: 'DragonKnight', level: 35, xp: 87000, streak: 60 },
+  { rank: 4, userId: '4', username: 'ShadowWalker', level: 32, xp: 76000, streak: 45 },
+  { rank: 5, userId: '5', username: 'PhoenixRider', level: 30, xp: 68000, streak: 30 },
+  { rank: 6, userId: '6', username: 'StormBringer', level: 28, xp: 62000, streak: 28 },
+  { rank: 7, userId: '7', username: 'MoonWarrior', level: 25, xp: 54000, streak: 21 },
+  { rank: 8, userId: '8', username: 'SunChaser', level: 23, xp: 48000, streak: 18 },
+  { rank: 9, userId: '9', username: 'StarGazer', level: 20, xp: 42000, streak: 14 },
+  { rank: 10, userId: '10', username: 'NightHunter', level: 18, xp: 36000, streak: 10 },
+];
+
+const getRankIcon = (rank: number) => {
+  switch (rank) {
+    case 1:
+      return <Crown className="w-6 h-6 text-yellow-500" />;
+    case 2:
+      return <Medal className="w-6 h-6 text-gray-400" />;
+    case 3:
+      return <Medal className="w-6 h-6 text-amber-600" />;
+    default:
+      return <span className="text-lg font-bold text-gray-500">#{rank}</span>;
+  }
 };
 
-const rankStyles: Record<number, { bg: string; border: string; icon: typeof Trophy }> = {
-  1: { bg: 'bg-yellow-50 dark:bg-yellow-900/20', border: 'border-yellow-400', icon: Crown },
-  2: { bg: 'bg-gray-50 dark:bg-gray-800/50', border: 'border-gray-400', icon: Medal },
-  3: { bg: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-400', icon: Medal },
+const getRankStyle = (rank: number) => {
+  switch (rank) {
+    case 1:
+      return 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-500/50';
+    case 2:
+      return 'bg-gradient-to-r from-gray-400/20 to-gray-300/20 border-gray-400/50';
+    case 3:
+      return 'bg-gradient-to-r from-amber-600/20 to-orange-600/20 border-amber-600/50';
+    default:
+      return '';
+  }
 };
+
+type LeaderboardType = 'xp' | 'streak';
 
 export default function LeaderboardPage() {
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'xp' | 'streak'>('xp');
+  const [type, setType] = useState<LeaderboardType>('xp');
 
-  const data = leaderboardData[activeTab];
+  const sortedLeaderboard = [...mockLeaderboard].sort((a, b) => {
+    if (type === 'xp') return b.xp - a.xp;
+    return b.streak - a.streak;
+  }).map((entry, index) => ({ ...entry, rank: index + 1 }));
 
-  // Mock user rank
-  const userRank = { rank: 42, xp: 450, streak: 7 };
+  // Find current user's rank (mock)
+  const userRank = 15;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
       <div className="text-center">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-yellow-100 dark:bg-yellow-900/30 mb-4"
-        >
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center justify-center gap-3">
           <Trophy className="w-8 h-8 text-yellow-500" />
-        </motion.div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Classement</h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-2">
+          Classement
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">
           Les meilleurs aventuriers de HabitQuest
         </p>
       </div>
 
-      {/* Your Rank */}
-      <Card variant="elevated" className="bg-gradient-to-r from-primary-600 to-accent-600 text-white">
-        <div className="p-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-2xl font-bold">
-              #{userRank.rank}
-            </div>
-            <div>
-              <p className="font-bold text-lg">{user?.username}</p>
-              <p className="text-white/80 text-sm">Votre classement actuel</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold">{user?.level}</p>
-                <p className="text-xs text-white/80">Niveau</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold">{user?.xp}</p>
-                <p className="text-xs text-white/80">XP</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold">{user?.streak}</p>
-                <p className="text-xs text-white/80">Streak</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Tabs */}
-      <div className="flex gap-2 justify-center">
+      {/* Type Toggle */}
+      <div className="flex justify-center gap-2">
         <button
-          onClick={() => setActiveTab('xp')}
-          className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all ${
-            activeTab === 'xp'
+          onClick={() => setType('xp')}
+          className={cn(
+            'flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all',
+            type === 'xp'
               ? 'bg-primary-600 text-white'
-              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          )}
         >
-          <Sparkles className="w-5 h-5" />
+          <TrendingUp className="w-5 h-5" />
           Par XP
         </button>
         <button
-          onClick={() => setActiveTab('streak')}
-          className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all ${
-            activeTab === 'streak'
-              ? 'bg-orange-500 text-white'
-              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
+          onClick={() => setType('streak')}
+          className={cn(
+            'flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all',
+            type === 'streak'
+              ? 'bg-primary-600 text-white'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          )}
         >
           <Flame className="w-5 h-5" />
-          Par Streak
+          Par Série
         </button>
       </div>
 
       {/* Top 3 Podium */}
-      <div className="flex items-end justify-center gap-4 py-8">
+      <div className="flex justify-center items-end gap-4 py-6">
         {/* 2nd Place */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ y: 50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}
           className="text-center"
         >
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-3xl mx-auto mb-2">
-            {data[1].avatarEmoji}
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-2xl font-bold text-white mx-auto mb-2">
+            {sortedLeaderboard[1]?.username.charAt(0)}
           </div>
-          <p className="font-bold text-gray-900 dark:text-white">{data[1].username}</p>
-          <p className="text-sm text-gray-500">Niv. {data[1].level}</p>
-          <div className="mt-2 w-20 h-24 bg-gray-200 dark:bg-gray-700 rounded-t-lg flex items-center justify-center">
-            <span className="text-4xl font-bold text-gray-400">2</span>
+          <Medal className="w-8 h-8 text-gray-400 mx-auto mb-1" />
+          <p className="font-semibold text-gray-900 dark:text-white text-sm truncate max-w-[100px]">
+            {sortedLeaderboard[1]?.username}
+          </p>
+          <p className="text-xs text-gray-500">Niveau {sortedLeaderboard[1]?.level}</p>
+          <div className="h-20 w-24 bg-gray-400/30 rounded-t-lg mt-2 flex items-center justify-center">
+            <span className="text-2xl font-bold text-gray-400">2</span>
           </div>
         </motion.div>
 
         {/* 1st Place */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ y: 50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1 }}
           className="text-center"
         >
-          <Crown className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center text-4xl mx-auto mb-2 ring-4 ring-yellow-300">
-            {data[0].avatarEmoji}
+          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-3xl font-bold text-white mx-auto mb-2 ring-4 ring-yellow-300">
+            {sortedLeaderboard[0]?.username.charAt(0)}
           </div>
-          <p className="font-bold text-gray-900 dark:text-white text-lg">{data[0].username}</p>
-          <p className="text-sm text-gray-500">Niv. {data[0].level}</p>
-          <div className="mt-2 w-24 h-32 bg-yellow-400 rounded-t-lg flex items-center justify-center">
-            <span className="text-5xl font-bold text-yellow-700">1</span>
+          <Crown className="w-10 h-10 text-yellow-500 mx-auto mb-1" />
+          <p className="font-bold text-gray-900 dark:text-white truncate max-w-[120px]">
+            {sortedLeaderboard[0]?.username}
+          </p>
+          <p className="text-sm text-gray-500">Niveau {sortedLeaderboard[0]?.level}</p>
+          <div className="h-28 w-28 bg-yellow-500/30 rounded-t-lg mt-2 flex items-center justify-center">
+            <span className="text-3xl font-bold text-yellow-500">1</span>
           </div>
         </motion.div>
 
         {/* 3rd Place */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ y: 50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.3 }}
           className="text-center"
         >
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center text-3xl mx-auto mb-2">
-            {data[2].avatarEmoji}
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-2xl font-bold text-white mx-auto mb-2">
+            {sortedLeaderboard[2]?.username.charAt(0)}
           </div>
-          <p className="font-bold text-gray-900 dark:text-white">{data[2].username}</p>
-          <p className="text-sm text-gray-500">Niv. {data[2].level}</p>
-          <div className="mt-2 w-20 h-20 bg-orange-300 rounded-t-lg flex items-center justify-center">
-            <span className="text-4xl font-bold text-orange-600">3</span>
+          <Medal className="w-8 h-8 text-amber-600 mx-auto mb-1" />
+          <p className="font-semibold text-gray-900 dark:text-white text-sm truncate max-w-[100px]">
+            {sortedLeaderboard[2]?.username}
+          </p>
+          <p className="text-xs text-gray-500">Niveau {sortedLeaderboard[2]?.level}</p>
+          <div className="h-16 w-24 bg-amber-600/30 rounded-t-lg mt-2 flex items-center justify-center">
+            <span className="text-2xl font-bold text-amber-600">3</span>
           </div>
         </motion.div>
       </div>
 
-      {/* Full Leaderboard */}
-      <Card variant="bordered" padding="none">
+      {/* Leaderboard List */}
+      <Card variant="bordered" padding="none" className="overflow-hidden">
         <div className="divide-y divide-gray-200 dark:divide-gray-700">
-          {data.slice(3).map((entry, index) => (
+          {sortedLeaderboard.slice(3).map((entry, index) => (
             <motion.div
-              key={entry.username}
+              key={entry.userId}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 * index }}
+              transition={{ delay: index * 0.05 }}
               className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
             >
-              <span className="w-8 text-center font-bold text-gray-500 dark:text-gray-400">
-                {entry.rank}
-              </span>
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-400 to-accent-400 flex items-center justify-center text-xl">
-                {entry.avatarEmoji}
+              <div className="w-10 flex justify-center">
+                {getRankIcon(entry.rank)}
               </div>
-              <div className="flex-1">
-                <p className="font-bold text-gray-900 dark:text-white">{entry.username}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Niveau {entry.level}</p>
+              
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-400 to-accent-400 flex items-center justify-center text-lg font-bold text-white">
+                {entry.username.charAt(0)}
               </div>
-              <div className="text-right">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1">
-                    <Sparkles className="w-4 h-4 text-game-xp" />
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {entry.xp.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
+
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-gray-900 dark:text-white truncate">
+                  {entry.username}
+                </p>
+                <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                  <span>Niveau {entry.level}</span>
+                  <span className="flex items-center gap-1">
                     <Flame className="w-4 h-4 text-orange-500" />
-                    <span className="font-medium text-gray-900 dark:text-white">{entry.streak}</span>
-                  </div>
+                    {entry.streak} jours
+                  </span>
                 </div>
+              </div>
+
+              <div className="text-right">
+                <p className="font-bold text-game-xp">
+                  {type === 'xp' ? `${(entry.xp / 1000).toFixed(1)}K XP` : `${entry.streak} jours`}
+                </p>
               </div>
             </motion.div>
           ))}
+        </div>
+      </Card>
+
+      {/* Current User Position */}
+      <Card variant="bordered" padding="md" className="bg-primary-500/10 border-primary-500/30">
+        <div className="flex items-center gap-4">
+          <div className="w-10 flex justify-center">
+            <span className="text-lg font-bold text-primary-500">#{userRank}</span>
+          </div>
+          
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-400 to-accent-400 flex items-center justify-center text-lg font-bold text-white">
+            {user?.username.charAt(0).toUpperCase()}
+          </div>
+
+          <div className="flex-1">
+            <p className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              {user?.username}
+              <Badge size="sm" variant="info">Vous</Badge>
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Niveau {user?.level} • {user?.streak} jours de série
+            </p>
+          </div>
+
+          <div className="text-right">
+            <p className="font-bold text-game-xp">{user?.xp} XP</p>
+          </div>
         </div>
       </Card>
     </div>
