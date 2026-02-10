@@ -99,7 +99,7 @@ from app.routers import completions as completions_module
 from app.routers import characters as characters_module
 from app.routers import shop as shop_module
 from app.routers import inventory as inventory_module
-from app.routers import combat as combat_module
+# from app.routers import combat as combat_module  # DISABLED
 from app.routers import friends as friends_module
 from app.routers import leaderboard as leaderboard_module
 from app.routers import stats as stats_module
@@ -118,7 +118,7 @@ app.include_router(completions_module.router, prefix="/api")
 app.include_router(characters_module.router, prefix="/api")
 app.include_router(shop_module.router, prefix="/api")
 app.include_router(inventory_module.router, prefix="/api")
-app.include_router(combat_module.router, prefix="/api")
+# app.include_router(combat_module.router, prefix="/api")
 app.include_router(badges_module.router, prefix="/api")
 
 # Social

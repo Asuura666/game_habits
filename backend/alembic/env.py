@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 # Import your models here
-from app.database import Base
+from app.models.base import Base
 from app.config import get_settings
 from app.models import user, character, habit, task, subtask, completion, item, inventory, badge, friendship, combat, transaction, notification, stats
 

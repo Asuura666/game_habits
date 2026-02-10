@@ -88,3 +88,11 @@ body {
     @apply bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent;
   }
 }
+
+/* LPC Character animations */
+@keyframes shine {
+  to { transform: translateX(200%); }
+}
+.animate-shine {
+  animation: shine 3s ease-in-out infinite;
+}

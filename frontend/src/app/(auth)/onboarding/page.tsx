@@ -16,7 +16,7 @@ import {
   User
 } from 'lucide-react';
 import { Button, Card, Input } from '@/components/ui';
-import { SpriteAvatar, getPresetsForClass, type SpriteConfig } from '@/components/character';
+import { LPCCharacter } from '@/components/character';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 
@@ -82,7 +82,7 @@ export default function OnboardingPage() {
   const [characterName, setCharacterName] = useState('');
   const [selectedClass, setSelectedClass] = useState<CharacterClass | null>(null);
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
-  const [avatarConfig, setAvatarConfig] = useState<SpriteConfig | null>(null);
+  // avatarConfig removed - using LPCCharacter
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -99,10 +99,10 @@ export default function OnboardingPage() {
     }
     if (step === 3 && !selectedAvatar) {
       // Auto-select first avatar if none selected
-      const presets = selectedClass ? getPresetsForClass(selectedClass) : [];
-      if (presets.length > 0) {
-        setSelectedAvatar(presets[0].id);
-        setAvatarConfig(presets[0].config);
+      // presets removed
+      if (false) { // LPC auto-avatar disabled
+        // removed
+        // removed
       }
     }
     setError('');
@@ -155,7 +155,7 @@ export default function OnboardingPage() {
   };
 
   const selectedClassData = CLASSES.find(c => c.id === selectedClass);
-  const avatarPresets = selectedClass ? getPresetsForClass(selectedClass) : [];
+  const avatarPresets: any[] = []; // LPC uses class-based avatars
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
@@ -272,7 +272,7 @@ export default function OnboardingPage() {
                           setSelectedClass(cls.id);
                           // Reset avatar when class changes
                           setSelectedAvatar(null);
-                          setAvatarConfig(null);
+                          // removed
                         }}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
@@ -346,7 +346,7 @@ export default function OnboardingPage() {
                       key={preset.id}
                       onClick={() => {
                         setSelectedAvatar(preset.id);
-                        setAvatarConfig(preset.config);
+                        // removed
                       }}
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.95 }}
@@ -357,9 +357,9 @@ export default function OnboardingPage() {
                           : 'hover:bg-gray-700/50'
                       )}
                     >
-                      <SpriteAvatar
-                        config={preset.config}
-                        characterClass={preset.class}
+                      <LPCCharacter
+                        
+                        characterClass={preset.class || selectedClass || "warrior"}
                         size="xl"
                       />
                     </motion.button>
@@ -367,10 +367,10 @@ export default function OnboardingPage() {
                 </div>
 
                 {/* Preview */}
-                {selectedAvatar && avatarConfig && (
+                {selectedAvatar && selectedClass && (
                   <div className="text-center p-6 bg-gray-900/50 rounded-xl">
-                    <SpriteAvatar
-                      config={avatarConfig}
+                    <LPCCharacter
+                      
                       characterClass={selectedClass}
                       size="xl"
                       className="mx-auto mb-4"
@@ -418,9 +418,9 @@ export default function OnboardingPage() {
 
                 <div className="bg-gray-900/50 rounded-2xl p-6 mb-6">
                   <div className="flex items-center gap-6">
-                    {avatarConfig ? (
-                      <SpriteAvatar
-                        config={avatarConfig}
+                    {selectedClass ? (
+                      <LPCCharacter
+                        
                         characterClass={selectedClass!}
                         size="xl"
                       />

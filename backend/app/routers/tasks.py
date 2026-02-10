@@ -200,7 +200,10 @@ async def create_task(
     
     # Trigger AI evaluation if requested and no manual values
     if task_data.use_ai_evaluation and not task_data.difficulty:
-        evaluate_task_difficulty.delay(str(task.id))
+        try:
+            evaluate_task_difficulty.delay(str(task.id))
+        except Exception:
+            pass  # Celery unavailable
         logger.info("AI evaluation triggered", task_id=str(task.id))
     
     return task_to_response(task)
@@ -550,7 +553,10 @@ async def reevaluate_task_endpoint(
         )
     
     # Trigger async re-evaluation
-    reevaluate_task.delay(str(task.id))
+    try:
+        reevaluate_task.delay(str(task.id))
+    except Exception:
+        pass  # Celery unavailable
     
     logger.info(
         "Task re-evaluation triggered",

@@ -26,7 +26,7 @@ from app.schemas.friend import (
     FriendshipStatus,
     PendingRequestsResponse,
 )
-from app.utils.auth import CurrentUser
+from app.deps import CurrentUser
 
 logger = structlog.get_logger()
 

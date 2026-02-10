@@ -42,7 +42,7 @@ from app.schemas.stats import (
     StatsOverview,
     TimeRange,
 )
-from app.utils.auth import CurrentUser
+from app.deps import CurrentUser
 
 logger = structlog.get_logger()
 settings = get_settings()

@@ -41,12 +41,6 @@ from app.services.streak_service import (
     recover_streak,
 )
 
-from app.services.combat_service import (
-    CombatService,
-    CombatantState,
-    TurnResult,
-    CombatResult,
-)
 
 from app.services.badge_service import (
     check_all_badges,
@@ -118,3 +112,14 @@ __all__ = [
     "get_top_around_user",
     "cleanup_old_leaderboards",
 ]
+
+from app.services.combat_service import (
+    CombatStats,
+    CombatResult,
+    get_combat_stats,
+    calculate_damage,
+    simulate_combat,
+    distribute_rewards,
+    create_combat_record,
+    get_combat_preview,
+)

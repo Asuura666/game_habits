@@ -3,7 +3,6 @@
 from app.routers.auth import router as auth_router
 from app.routers.badges import router as badges_router
 from app.routers.characters import router as characters_router
-from app.routers.combat import router as combat_router
 from app.routers.completions import router as completions_router
 from app.routers.friends import router as friends_router
 from app.routers.habits import router as habits_router
@@ -19,7 +18,6 @@ __all__ = [
     "auth_router",
     "badges_router",
     "characters_router",
-    "combat_router",
     "completions_router",
     "friends_router",
     "habits_router",

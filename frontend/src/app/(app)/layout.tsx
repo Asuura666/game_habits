@@ -10,6 +10,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isAuthenticated, isLoading, setLoading, checkCharacter, hasCharacter } = useAuthStore();
   const [isCheckingCharacter, setIsCheckingCharacter] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     // Check if user data exists in localStorage
@@ -42,6 +43,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     verifyCharacter();
   }, [isAuthenticated, isLoading, checkCharacter, router]);
 
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, []);
+
   if (isLoading || isCheckingCharacter) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -59,10 +65,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-      <Sidebar />
-      <div className="ml-64">
-        <Header />
-        <main className="p-6">{children}</main>
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <div className="lg:ml-64">
+        <Header onMenuClick={() => setIsSidebarOpen(true)} />
+        <main className="p-4 lg:p-6">{children}</main>
       </div>
     </div>
   );

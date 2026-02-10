@@ -1,0 +1,73 @@
+# Habit Tracker - Test Environment
+# Separate database for tests, no persistence (tmpfs = RAM)
+
+services:
+  # ============================================
+  # TEST DATABASE (isolated, ephemeral)
+  # ============================================
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: habit-postgres-test
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: habit_tracker_test
+    tmpfs:
+      - /var/lib/postgresql/data  # RAM = fast + auto-cleanup
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d habit_tracker_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - test-network
+    # No port exposure needed - tests run inside Docker network
+
+  # ============================================
+  # TEST REDIS
+  # ============================================
+  redis-test:
+    image: redis:7-alpine
+    container_name: habit-redis-test
+    command: redis-server --appendonly no  # No persistence for tests
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - test-network
+    # No port exposure needed - tests run inside Docker network
+
+  # ============================================
+  # TEST BACKEND
+  # ============================================
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: habit-backend-test
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://test_user:test_password@postgres-test:5432/habit_tracker_test
+      - REDIS_URL=redis://redis-test:6379/0
+      - SECRET_KEY=test-secret-key-not-for-production
+      - ENVIRONMENT=test
+      - LOG_LEVEL=WARNING
+      - CORS_ORIGINS=["http://localhost:3000","http://localhost:8000"]
+    # No port exposure needed - tests run inside Docker network
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  test-network:
+    driver: bridge

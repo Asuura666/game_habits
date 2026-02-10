@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
   Target,
@@ -18,6 +18,7 @@ import {
   BarChart3,
   LogOut,
   Flame,
+  X,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { ProgressBar } from '@/components/ui';
@@ -36,30 +37,49 @@ const navItems = [
   { href: '/stats', icon: BarChart3, label: 'Statistiques' },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user, character, logout } = useAuthStore();
 
   // Use character coins if available, fallback to user gold
   const coins = character?.coins ?? user?.gold ?? 0;
 
-  return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-gray-900 text-white flex flex-col">
+  const handleNavClick = () => {
+    // Close sidebar on mobile after navigation
+    if (onClose) {
+      onClose();
+    }
+  };
+
+  const sidebarContent = (
+    <>
       {/* Logo */}
-      <div className="p-6 border-b border-gray-800">
-        <Link href="/dashboard" className="flex items-center gap-3">
+      <div className="p-4 lg:p-6 border-b border-gray-800 flex items-center justify-between">
+        <Link href="/dashboard" className="flex items-center gap-3" onClick={handleNavClick}>
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center">
             <Flame className="w-6 h-6 text-white" />
           </div>
           <span className="text-xl font-bold">HabitQuest</span>
         </Link>
+        {/* Close button for mobile */}
+        <button
+          onClick={onClose}
+          className="lg:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
       </div>
 
       {/* User Stats */}
       {user && (
         <div className="p-4 border-b border-gray-800">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-400 to-accent-400 flex items-center justify-center text-lg font-bold">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-400 to-accent-400 flex items-center justify-center text-lg font-bold shrink-0">
               {user.username.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
@@ -109,8 +129,9 @@ export function Sidebar() {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  onClick={handleNavClick}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
+                    'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative',
                     isActive
                       ? 'bg-primary-600 text-white'
                       : 'text-gray-400 hover:text-white hover:bg-gray-800'
@@ -134,13 +155,52 @@ export function Sidebar() {
       {/* Logout */}
       <div className="p-4 border-t border-gray-800">
         <button
-          onClick={() => logout()}
+          onClick={() => {
+            logout();
+            handleNavClick();
+          }}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all duration-200"
         >
           <LogOut className="w-5 h-5" />
           <span>Déconnexion</span>
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex fixed left-0 top-0 z-40 h-screen w-64 bg-gray-900 text-white flex-col">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+              className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+            />
+            
+            {/* Mobile Sidebar */}
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="lg:hidden fixed left-0 top-0 z-50 h-screen w-72 bg-gray-900 text-white flex flex-col shadow-2xl"
+            >
+              {sidebarContent}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

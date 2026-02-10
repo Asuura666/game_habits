@@ -1,6 +1,6 @@
 """Stats schemas for analytics and insights."""
 
-from datetime import date, datetime
+from datetime import date as DateType, datetime
 from enum import Enum
 from uuid import UUID
 
@@ -20,7 +20,7 @@ class TimeRange(str, Enum):
 class CalendarDay(BaseModel):
     """Schema for a single day in the habit calendar."""
     
-    date: date = Field(
+    day_date: DateType = Field(
         ...,
         description="The date",
         examples=["2024-02-09"]
@@ -132,11 +132,11 @@ class StatsOverview(BaseModel):
         ...,
         description="Time range for these stats"
     )
-    start_date: date = Field(
+    start_date: DateType = Field(
         ...,
         description="Start of the period"
     )
-    end_date: date = Field(
+    end_date: DateType = Field(
         ...,
         description="End of the period"
     )

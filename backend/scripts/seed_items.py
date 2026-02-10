@@ -12,7 +12,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from uuid import uuid4
 from sqlalchemy import select
-from app.database import async_engine, get_db, AsyncSession
+from app.database import engine, get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.item import Item
 
 
@@ -422,7 +423,7 @@ async def seed_items():
     from sqlalchemy.orm import sessionmaker
     
     async_session = sessionmaker(
-        async_engine, class_=AsyncSession, expire_on_commit=False
+        engine, class_=AsyncSession, expire_on_commit=False
     )
     
     async with async_session() as db:

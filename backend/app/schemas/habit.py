@@ -98,7 +98,8 @@ class HabitBase(BaseModel):
     def validate_specific_days(cls, v: list[DayOfWeek] | None, info) -> list[DayOfWeek] | None:
         """Validate specific_days is provided when frequency is specific_days."""
         if v is not None and len(v) == 0:
-            raise ValueError("specific_days cannot be empty when provided")
+            return None  # Convert empty list to None
+            return None  # Empty list treated as None
         return v
     
     @field_validator("times_per_week")
