@@ -112,7 +112,7 @@ export default function BadgesPage() {
   });
 
   // Group by category
-  const categories = [...new Set(badges.map(b => b.badge.condition_type))];
+  const categories = Array.from(new Set(badges.map(b => b.badge.condition_type)));
 
   // Toggle badge display
   const toggleDisplay = (badgeId: string) => {
