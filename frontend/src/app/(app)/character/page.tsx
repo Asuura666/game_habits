@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Shield, Sword, Zap, Heart, Star, Award, Crown, Sparkles, Target, Loader2 } from 'lucide-react';
-import { Card, ProgressBar, Badge } from '@/components/ui';
+import { Shield, Sword, Zap, Heart, Star, Award, Crown, Sparkles, Target, Loader2, Package, Shirt, CircleDot } from 'lucide-react';
+import { Card, ProgressBar, Badge, Button } from '@/components/ui';
 import { SpriteAvatar, AVATAR_PRESETS } from '@/components/character';
 import { useAuthStore } from '@/stores/authStore';
-import { cn } from '@/lib/utils';
+import { cn, getRarityColor } from '@/lib/utils';
+import Link from 'next/link';
 
 interface CharacterStats {
   strength: number;
@@ -37,6 +38,32 @@ interface CharacterData {
   updated_at: string;
 }
 
+interface EquippedItem {
+  id: string;
+  item_id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  rarity: string;
+  strength_bonus: number;
+  endurance_bonus: number;
+  agility_bonus: number;
+  intelligence_bonus: number;
+  charisma_bonus: number;
+  sprite_url: string | null;
+  is_equipped: boolean;
+  equipped_slot: string;
+}
+
+interface EquippedItems {
+  weapon: EquippedItem | null;
+  armor: EquippedItem | null;
+  helmet: EquippedItem | null;
+  accessory: EquippedItem | null;
+  pet: EquippedItem | null;
+  total_stats_bonus: Record<string, number>;
+}
+
 const classInfo: Record<string, { name: string; icon: typeof Sword; color: string; bgColor: string }> = {
   warrior: { name: 'Guerrier', icon: Sword, color: 'text-red-500', bgColor: 'from-red-500 to-orange-500' },
   mage: { name: 'Mage', icon: Zap, color: 'text-blue-500', bgColor: 'from-blue-500 to-purple-500' },
@@ -55,6 +82,14 @@ const statConfig = {
   luck: { label: 'Chance', icon: Star, color: 'from-yellow-500 to-amber-500' },
 };
 
+const slotConfig: Record<string, { label: string; icon: typeof Sword }> = {
+  weapon: { label: 'Arme', icon: Sword },
+  armor: { label: 'Armure', icon: Shirt },
+  helmet: { label: 'Casque', icon: Crown },
+  accessory: { label: 'Accessoire', icon: CircleDot },
+  pet: { label: 'Familier', icon: Heart },
+};
+
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -71,26 +106,36 @@ const itemVariants = {
 export default function CharacterPage() {
   const { user, accessToken } = useAuthStore();
   const [character, setCharacter] = useState<CharacterData | null>(null);
+  const [equippedItems, setEquippedItems] = useState<EquippedItems | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchCharacter = async () => {
+    const fetchData = async () => {
       if (!accessToken) return;
 
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/characters/me`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`
-          }
-        });
+        // Fetch character and equipped items in parallel
+        const [charResponse, equipResponse] = await Promise.all([
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/characters/me`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/inventory/equipped`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          })
+        ]);
 
-        if (!response.ok) {
+        if (!charResponse.ok) {
           throw new Error('Failed to fetch character');
         }
 
-        const data = await response.json();
-        setCharacter(data);
+        const charData = await charResponse.json();
+        setCharacter(charData);
+
+        if (equipResponse.ok) {
+          const equipData = await equipResponse.json();
+          setEquippedItems(equipData);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
@@ -98,7 +143,7 @@ export default function CharacterPage() {
       }
     };
 
-    fetchCharacter();
+    fetchData();
   }, [accessToken]);
 
   if (isLoading) {
@@ -124,6 +169,17 @@ export default function CharacterPage() {
 
   const classData = classInfo[character.character_class] || classInfo.warrior;
   const ClassIcon = classData.icon;
+
+  // Calculate total stats with equipment bonus
+  const baseStats = character.stats;
+  const equipBonus = equippedItems?.total_stats_bonus || {};
+  const totalStats = {
+    strength: baseStats.strength + (equipBonus.strength || 0),
+    intelligence: baseStats.intelligence + (equipBonus.intelligence || 0),
+    agility: baseStats.agility + (equipBonus.agility || 0),
+    vitality: baseStats.vitality + (equipBonus.endurance || 0),
+    luck: baseStats.luck + (equipBonus.charisma || 0),
+  };
 
   return (
     <motion.div
@@ -234,10 +290,12 @@ export default function CharacterPage() {
               </h3>
               
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {(Object.entries(character.stats) as [keyof CharacterStats, number][]).map(([stat, value]) => {
+                {(Object.entries(totalStats) as [keyof typeof totalStats, number][]).map(([stat, value]) => {
                   const config = statConfig[stat];
                   if (!config) return null;
                   const Icon = config.icon;
+                  const baseValue = baseStats[stat];
+                  const bonusValue = value - baseValue;
 
                   return (
                     <div
@@ -252,12 +310,100 @@ export default function CharacterPage() {
                       >
                         <Icon className="w-6 h-6" />
                       </div>
-                      <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {value}
+                        {bonusValue > 0 && (
+                          <span className="text-sm text-green-500 ml-1">+{bonusValue}</span>
+                        )}
+                      </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">{config.label}</p>
                     </div>
                   );
                 })}
               </div>
+            </Card>
+          </motion.div>
+
+          {/* Equipment */}
+          <motion.div variants={itemVariants}>
+            <Card variant="bordered" padding="lg">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Package className="w-5 h-5 text-primary-500" />
+                  Équipement
+                </h3>
+                <Link href="/inventory">
+                  <Button variant="secondary" size="sm">
+                    Gérer l'inventaire
+                  </Button>
+                </Link>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                {(['weapon', 'armor', 'helmet', 'accessory', 'pet'] as const).map((slot) => {
+                  const item = equippedItems?.[slot];
+                  const config = slotConfig[slot];
+                  const Icon = config.icon;
+
+                  return (
+                    <div
+                      key={slot}
+                      className={cn(
+                        'relative rounded-xl p-4 text-center border-2 border-dashed transition-all',
+                        item 
+                          ? 'border-primary-500/50 bg-primary-500/10' 
+                          : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/30'
+                      )}
+                    >
+                      {item ? (
+                        <>
+                          <div className={cn(
+                            'w-12 h-12 rounded-lg mx-auto mb-2 flex items-center justify-center',
+                            item.rarity === 'legendary' && 'bg-gradient-to-br from-yellow-500/30 to-orange-500/30',
+                            item.rarity === 'epic' && 'bg-gradient-to-br from-purple-500/30 to-pink-500/30',
+                            item.rarity === 'rare' && 'bg-gradient-to-br from-blue-500/30 to-cyan-500/30',
+                            item.rarity === 'uncommon' && 'bg-gradient-to-br from-green-500/30 to-emerald-500/30',
+                            item.rarity === 'common' && 'bg-gray-500/20'
+                          )}>
+                            <Icon className={cn('w-6 h-6', getRarityColor(item.rarity))} />
+                          </div>
+                          <p className={cn('text-sm font-medium truncate', getRarityColor(item.rarity))}>
+                            {item.name}
+                          </p>
+                          <Badge size="sm" className="mt-1">
+                            {item.rarity}
+                          </Badge>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-12 h-12 rounded-lg mx-auto mb-2 flex items-center justify-center bg-gray-200 dark:bg-gray-700">
+                            <Icon className="w-6 h-6 text-gray-400" />
+                          </div>
+                          <p className="text-sm text-gray-400">{config.label}</p>
+                          <p className="text-xs text-gray-500">Vide</p>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Equipment Bonus Summary */}
+              {equippedItems && Object.values(equippedItems.total_stats_bonus).some(v => v > 0) && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Bonus d'équipement total :</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(equippedItems.total_stats_bonus).map(([stat, value]) => {
+                      if (value <= 0) return null;
+                      return (
+                        <Badge key={stat} variant="success" className="gap-1">
+                          +{value} {stat.charAt(0).toUpperCase() + stat.slice(1)}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </Card>
           </motion.div>
 

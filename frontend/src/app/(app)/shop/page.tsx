@@ -1,112 +1,158 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, Coins, Sword, Shield, Sparkles, Shirt, Gem, Check } from 'lucide-react';
+import { 
+  ShoppingBag, 
+  Coins, 
+  Sword, 
+  Shield, 
+  Sparkles, 
+  Shirt, 
+  Gem, 
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Package,
+  Loader2
+} from 'lucide-react';
 import { Card, Button, Badge } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import { cn, getRarityColor } from '@/lib/utils';
-import type { ShopItem } from '@/types';
+import Link from 'next/link';
 
-const shopItems: (ShopItem & { rarity: string })[] = [
-  {
-    id: '1',
-    name: 'Épée Légendaire',
-    description: '+15 Force, +5% critique',
-    price: 500,
-    type: 'equipment',
-    rarity: 'legendary',
-  },
-  {
-    id: '2',
-    name: 'Bouclier du Gardien',
-    description: '+20 Défense, +50 PV max',
-    price: 350,
-    type: 'equipment',
-    rarity: 'epic',
-  },
-  {
-    id: '3',
-    name: 'Potion de Soin',
-    description: 'Restaure 50 PV',
-    price: 25,
-    type: 'consumable',
-    rarity: 'common',
-  },
-  {
-    id: '4',
-    name: 'Élixir de Mana',
-    description: 'Restaure 30 Mana',
-    price: 30,
-    type: 'consumable',
-    rarity: 'common',
-  },
-  {
-    id: '5',
-    name: 'Cape du Voyageur',
-    description: 'Look unique pour votre avatar',
-    price: 200,
-    type: 'cosmetic',
-    rarity: 'rare',
-  },
-  {
-    id: '6',
-    name: 'Aura Dorée',
-    description: 'Effet visuel spécial',
-    price: 750,
-    type: 'cosmetic',
-    rarity: 'legendary',
-  },
-  {
-    id: '7',
-    name: 'Boost XP x2',
-    description: 'Double XP pendant 24h',
-    price: 100,
-    type: 'consumable',
-    rarity: 'rare',
-  },
-  {
-    id: '8',
-    name: 'Anneau de Sagesse',
-    description: '+10 Intelligence',
-    price: 250,
-    type: 'equipment',
-    rarity: 'uncommon',
-  },
-];
+interface ShopItemAPI {
+  id: string;
+  name: string;
+  description: string;
+  category: 'weapon' | 'armor' | 'accessory' | 'consumable' | 'cosmetic';
+  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+  price: number;
+  strength_bonus?: number;
+  endurance_bonus?: number;
+  intelligence_bonus?: number;
+  charisma_bonus?: number;
+  is_owned: boolean;
+  can_afford: boolean;
+}
 
-const typeIcons = {
-  equipment: Sword,
+interface ShopResponse {
+  items: ShopItemAPI[];
+  total: number;
+  page: number;
+  per_page: number;
+  has_next: boolean;
+}
+
+const categoryIcons: Record<string, React.ElementType> = {
+  weapon: Sword,
+  armor: Shield,
+  accessory: Sparkles,
   consumable: Sparkles,
   cosmetic: Shirt,
 };
 
-const typeLabels = {
-  equipment: 'Équipement',
-  consumable: 'Consommable',
-  cosmetic: 'Cosmétique',
+const categoryLabels: Record<string, string> = {
+  weapon: 'Armes',
+  armor: 'Armures',
+  accessory: 'Accessoires',
+  consumable: 'Consommables',
+  cosmetic: 'Cosmétiques',
 };
 
 export default function ShopPage() {
-  const { user, updateUser } = useAuthStore();
-  const [filter, setFilter] = useState<'all' | 'equipment' | 'consumable' | 'cosmetic'>('all');
-  const [purchasedItems, setPurchasedItems] = useState<string[]>([]);
+  const { character, accessToken, fetchCharacter } = useAuthStore();
+  const [items, setItems] = useState<ShopItemAPI[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'weapon' | 'armor' | 'accessory' | 'consumable' | 'cosmetic'>('all');
   const [purchasing, setPurchasing] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
 
-  const filteredItems = shopItems.filter((item) => filter === 'all' || item.type === filter);
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://habit.apps.ilanewep.cloud/api';
 
-  const handlePurchase = async (item: ShopItem & { rarity: string }) => {
-    if (!user || user.gold < item.price) return;
+  const fetchItems = useCallback(async () => {
+    if (!accessToken) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const categoryParam = filter !== 'all' ? `&category=${filter}` : '';
+      const response = await fetch(
+        `${API_URL}/shop/items?page=${page}&per_page=20${categoryParam}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Erreur lors du chargement de la boutique');
+      }
+
+      const data: ShopResponse = await response.json();
+      setItems(data.items);
+      setTotalPages(Math.ceil(data.total / data.per_page));
+      setHasNext(data.has_next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken, filter, page, API_URL]);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
+
+  const handlePurchase = async (item: ShopItemAPI) => {
+    if (!accessToken || item.is_owned || !item.can_afford) return;
 
     setPurchasing(item.id);
     
-    // Simulate purchase
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    
-    updateUser({ gold: user.gold - item.price });
-    setPurchasedItems((prev) => [...prev, item.id]);
-    setPurchasing(null);
+    try {
+      const response = await fetch(`${API_URL}/shop/buy/${item.id}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Erreur lors de l\'achat');
+      }
+
+      // Refresh character to get updated coins
+      await fetchCharacter();
+      // Refresh items to update owned/can_afford status
+      await fetchItems();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de l\'achat');
+    } finally {
+      setPurchasing(null);
+    }
   };
+
+  const getStatBonuses = (item: ShopItemAPI): string[] => {
+    const bonuses: string[] = [];
+    if (item.strength_bonus) bonuses.push(`+${item.strength_bonus} Force`);
+    if (item.endurance_bonus) bonuses.push(`+${item.endurance_bonus} Endurance`);
+    if (item.intelligence_bonus) bonuses.push(`+${item.intelligence_bonus} Intelligence`);
+    if (item.charisma_bonus) bonuses.push(`+${item.charisma_bonus} Charisme`);
+    return bonuses;
+  };
+
+  const userCoins = character?.coins ?? 0;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -121,16 +167,24 @@ export default function ShopPage() {
             Dépensez votre or durement gagné
           </p>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-yellow-100 dark:bg-yellow-900/30">
-          <Coins className="w-6 h-6 text-game-gold" />
-          <span className="text-xl font-bold text-game-gold">{user?.gold || 0}</span>
+        <div className="flex items-center gap-4">
+          <Link href="/inventory">
+            <Button variant="secondary" className="gap-2">
+              <Package className="w-5 h-5" />
+              Mon Inventaire
+            </Button>
+          </Link>
+          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-yellow-100 dark:bg-yellow-900/30">
+            <Coins className="w-6 h-6 text-game-gold" />
+            <span className="text-xl font-bold text-game-gold">{userCoins}</span>
+          </div>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
-        {(['all', 'equipment', 'consumable', 'cosmetic'] as const).map((f) => {
-          const Icon = f === 'all' ? ShoppingBag : typeIcons[f];
+        {(['all', 'weapon', 'armor', 'accessory', 'consumable', 'cosmetic'] as const).map((f) => {
+          const Icon = f === 'all' ? ShoppingBag : categoryIcons[f];
           return (
             <button
               key={f}
@@ -143,109 +197,165 @@ export default function ShopPage() {
               )}
             >
               <Icon className="w-4 h-4" />
-              {f === 'all' ? 'Tout' : typeLabels[f]}
+              {f === 'all' ? 'Tout' : categoryLabels[f]}
             </button>
           );
         })}
       </div>
 
-      {/* Items Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        <AnimatePresence mode="popLayout">
-          {filteredItems.map((item) => {
-            const Icon = typeIcons[item.type];
-            const isPurchased = purchasedItems.includes(item.id);
-            const canAfford = (user?.gold || 0) >= item.price;
-            const isPurchasing = purchasing === item.id;
-
-            return (
-              <motion.div
-                key={item.id}
-                layout
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-              >
-                <Card
-                  variant="bordered"
-                  padding="none"
-                  className={cn(
-                    'overflow-hidden transition-all',
-                    isPurchased && 'opacity-60',
-                    !canAfford && !isPurchased && 'opacity-75'
-                  )}
-                >
-                  {/* Item Header */}
-                  <div className={cn(
-                    'p-4 bg-gradient-to-r',
-                    item.rarity === 'legendary' && 'from-yellow-500/20 to-orange-500/20',
-                    item.rarity === 'epic' && 'from-purple-500/20 to-pink-500/20',
-                    item.rarity === 'rare' && 'from-blue-500/20 to-cyan-500/20',
-                    item.rarity === 'uncommon' && 'from-green-500/20 to-emerald-500/20',
-                    item.rarity === 'common' && 'from-gray-500/20 to-gray-400/20'
-                  )}>
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge size="sm" variant={item.rarity === 'legendary' ? 'warning' : 'default'}>
-                        {item.rarity}
-                      </Badge>
-                      <Icon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                    </div>
-                    <div className="w-16 h-16 rounded-xl bg-gray-800/50 flex items-center justify-center mx-auto">
-                      <Gem className={cn('w-8 h-8', getRarityColor(item.rarity))} />
-                    </div>
-                  </div>
-
-                  {/* Item Info */}
-                  <div className="p-4">
-                    <h3 className={cn('font-semibold mb-1', getRarityColor(item.rarity))}>
-                      {item.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                      {item.description}
-                    </p>
-
-                    {/* Price & Buy */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <Coins className="w-5 h-5 text-game-gold" />
-                        <span className={cn(
-                          'font-bold',
-                          canAfford ? 'text-game-gold' : 'text-red-500'
-                        )}>
-                          {item.price}
-                        </span>
-                      </div>
-                      
-                      {isPurchased ? (
-                        <Button size="sm" disabled className="gap-1">
-                          <Check className="w-4 h-4" />
-                          Acheté
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() => handlePurchase(item)}
-                          disabled={!canAfford || isPurchasing}
-                          isLoading={isPurchasing}
-                        >
-                          Acheter
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
-
-      {filteredItems.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-gray-500 dark:text-gray-400">
-            Aucun article dans cette catégorie
-          </p>
+      {/* Error */}
+      {error && (
+        <div className="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-4 rounded-lg">
+          {error}
         </div>
+      )}
+
+      {/* Loading */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+        </div>
+      ) : (
+        <>
+          {/* Items Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <AnimatePresence mode="popLayout">
+              {items.map((item) => {
+                const Icon = categoryIcons[item.category] || Gem;
+                const isPurchasing = purchasing === item.id;
+                const bonuses = getStatBonuses(item);
+
+                return (
+                  <motion.div
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                  >
+                    <Card
+                      variant="bordered"
+                      padding="none"
+                      className={cn(
+                        'overflow-hidden transition-all',
+                        item.is_owned && 'opacity-60',
+                        !item.can_afford && !item.is_owned && 'opacity-75'
+                      )}
+                    >
+                      {/* Item Header */}
+                      <div className={cn(
+                        'p-4 bg-gradient-to-r',
+                        item.rarity === 'legendary' && 'from-yellow-500/20 to-orange-500/20',
+                        item.rarity === 'epic' && 'from-purple-500/20 to-pink-500/20',
+                        item.rarity === 'rare' && 'from-blue-500/20 to-cyan-500/20',
+                        item.rarity === 'uncommon' && 'from-green-500/20 to-emerald-500/20',
+                        item.rarity === 'common' && 'from-gray-500/20 to-gray-400/20'
+                      )}>
+                        <div className="flex items-center justify-between mb-2">
+                          <Badge size="sm" variant={item.rarity === 'legendary' ? 'warning' : 'default'}>
+                            {item.rarity}
+                          </Badge>
+                          <Icon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                        </div>
+                        <div className="w-16 h-16 rounded-xl bg-gray-800/50 flex items-center justify-center mx-auto">
+                          <Gem className={cn('w-8 h-8', getRarityColor(item.rarity))} />
+                        </div>
+                      </div>
+
+                      {/* Item Info */}
+                      <div className="p-4">
+                        <h3 className={cn('font-semibold mb-1', getRarityColor(item.rarity))}>
+                          {item.name}
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                          {item.description}
+                        </p>
+                        
+                        {/* Stat Bonuses */}
+                        {bonuses.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {bonuses.map((bonus, i) => (
+                              <span 
+                                key={i}
+                                className="text-xs bg-primary-500/20 text-primary-400 px-2 py-0.5 rounded"
+                              >
+                                {bonus}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Price & Buy */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1">
+                            <Coins className="w-5 h-5 text-game-gold" />
+                            <span className={cn(
+                              'font-bold',
+                              item.can_afford ? 'text-game-gold' : 'text-red-500'
+                            )}>
+                              {item.price}
+                            </span>
+                          </div>
+                          
+                          {item.is_owned ? (
+                            <Button size="sm" disabled className="gap-1">
+                              <Check className="w-4 h-4" />
+                              Possédé
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => handlePurchase(item)}
+                              disabled={!item.can_afford || isPurchasing}
+                              isLoading={isPurchasing}
+                            >
+                              Acheter
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+
+          {items.length === 0 && !loading && (
+            <div className="text-center py-12">
+              <p className="text-gray-500 dark:text-gray-400">
+                Aucun article dans cette catégorie
+              </p>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Précédent
+              </Button>
+              <span className="text-gray-500 dark:text-gray-400">
+                Page {page} / {totalPages}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage(p => p + 1)}
+                disabled={!hasNext}
+              >
+                Suivant
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -10,6 +10,7 @@ import {
   CheckSquare,
   User,
   ShoppingBag,
+  Package,
   Swords,
   Users,
   Trophy,
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/tasks', icon: CheckSquare, label: 'Tâches' },
   { href: '/character', icon: User, label: 'Personnage' },
   { href: '/shop', icon: ShoppingBag, label: 'Boutique' },
+  { href: '/inventory', icon: Package, label: 'Inventaire' },
   { href: '/combat', icon: Swords, label: 'Combat' },
   { href: '/friends', icon: Users, label: 'Amis' },
   { href: '/leaderboard', icon: Trophy, label: 'Classement' },
@@ -36,7 +38,10 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user, logout } = useAuthStore();
+  const { user, character, logout } = useAuthStore();
+
+  // Use character coins if available, fallback to user gold
+  const coins = character?.coins ?? user?.gold ?? 0;
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-gray-900 text-white flex flex-col">
@@ -59,7 +64,7 @@ export function Sidebar() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold truncate">{user.username}</p>
-              <p className="text-sm text-gray-400">Niveau {user.level}</p>
+              <p className="text-sm text-gray-400">Niveau {character?.level ?? user.level}</p>
             </div>
           </div>
           
@@ -67,27 +72,27 @@ export function Sidebar() {
             <div>
               <div className="flex justify-between text-xs mb-1">
                 <span className="text-game-xp">XP</span>
-                <span>{user.xp}/{user.xpToNextLevel}</span>
+                <span>{character?.xp ?? user.xp}/{character?.xp_to_next_level ?? user.xpToNextLevel}</span>
               </div>
-              <ProgressBar value={user.xp} max={user.xpToNextLevel} variant="xp" size="sm" />
+              <ProgressBar value={character?.xp ?? user.xp} max={character?.xp_to_next_level ?? user.xpToNextLevel} variant="xp" size="sm" />
             </div>
             <div>
               <div className="flex justify-between text-xs mb-1">
                 <span className="text-game-hp">HP</span>
-                <span>{user.hp}/{user.maxHp}</span>
+                <span>{character?.hp ?? user.hp}/{character?.max_hp ?? user.maxHp}</span>
               </div>
-              <ProgressBar value={user.hp} max={user.maxHp} variant="hp" size="sm" />
+              <ProgressBar value={character?.hp ?? user.hp} max={character?.max_hp ?? user.maxHp} variant="hp" size="sm" />
             </div>
           </div>
 
           <div className="flex items-center justify-between mt-3 text-sm">
             <div className="flex items-center gap-1">
               <span className="text-game-gold">🪙</span>
-              <span>{user.gold}</span>
+              <span>{coins}</span>
             </div>
             <div className="flex items-center gap-1">
               <Flame className="w-4 h-4 text-orange-500" />
-              <span>{user.streak} jours</span>
+              <span>{character?.streak ?? user.streak} jours</span>
             </div>
           </div>
         </div>

@@ -55,19 +55,37 @@ export interface Task {
 }
 
 // Character types
-export type CharacterClass = 'warrior' | 'mage' | 'rogue' | 'healer';
+export type CharacterClass = 'warrior' | 'mage' | 'ranger' | 'paladin' | 'assassin' | 'rogue' | 'healer';
 
-export interface Character {
-  id: string;
-  userId: string;
-  name: string;
-  class: CharacterClass;
-  level: number;
+export interface StatsDistribution {
   strength: number;
   intelligence: number;
   agility: number;
   vitality: number;
-  equipment: Equipment[];
+  luck: number;
+}
+
+export interface Character {
+  id: string;
+  user_id: string;
+  name: string;
+  character_class: CharacterClass;
+  title?: string;
+  avatar_id: string;
+  level: number;
+  current_xp: number;
+  xp_to_next_level: number;
+  total_xp: number;
+  hp: number;
+  max_hp: number;
+  stats: StatsDistribution;
+  unallocated_points: number;
+  coins: number;
+  gems: number;
+  streak?: number;
+  xp?: number; // Alias for current_xp
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Equipment {

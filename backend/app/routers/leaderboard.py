@@ -34,7 +34,7 @@ from app.schemas.stats import (
     LeaderboardResponse,
     TimeRange,
 )
-from app.utils.auth import CurrentUser
+from app.deps import CurrentUser
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -314,7 +314,7 @@ async def get_completion_leaderboard(
     result = await db.execute(
         select(
             DailyStats.user_id,
-            func.avg(DailyStats.completion_rate).label("avg_completion"),
+            func.avg(DailyStats.habits_completed * 100.0 / func.nullif(DailyStats.habits_total, 0)).label("avg_completion"),
         )
         .where(
             DailyStats.user_id.in_(friend_ids),
@@ -322,7 +322,7 @@ async def get_completion_leaderboard(
             DailyStats.habits_total > 0,  # Only count days with habits
         )
         .group_by(DailyStats.user_id)
-        .order_by(func.avg(DailyStats.completion_rate).desc())
+        .order_by(func.avg(DailyStats.habits_completed * 100.0 / func.nullif(DailyStats.habits_total, 0)).desc())
         .limit(limit)
     )
     rankings = result.all()

@@ -346,7 +346,7 @@ async def buy_item(
             description=item.description or "",
             category=item.category,
             rarity=item.rarity,
-            icon=item.sprite_url or "⚔️",
+            icon="🎁",
             price_coins=item.price,
             effects=[],
             created_at=item.created_at,
