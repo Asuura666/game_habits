@@ -24,30 +24,60 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // Mock login for now - replace with actual API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      // Mock user data
-      const mockUser: User = {
-        id: '1',
-        email,
-        username: email.split('@')[0],
-        level: 5,
-        xp: 450,
-        xpToNextLevel: 1000,
-        gold: 250,
-        hp: 80,
+      // Login API call
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          username: email,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Email ou mot de passe incorrect');
+      }
+
+      // Map API response to User type
+      const user: User = {
+        id: data.user.id,
+        email: data.user.email,
+        username: data.user.username,
+        level: data.user.level || 1,
+        xp: data.user.total_xp || 0,
+        xpToNextLevel: 100,
+        gold: data.user.coins || 0,
+        hp: 100,
         maxHp: 100,
         mana: 50,
         maxMana: 50,
-        streak: 7,
-        createdAt: new Date().toISOString(),
+        streak: 0,
+        avatarUrl: data.user.avatar_url,
+        createdAt: data.user.created_at,
       };
 
-      login(mockUser, 'mock-access-token', 'mock-refresh-token');
-      router.push('/dashboard');
+      login(user, data.access_token, data.access_token);
+      
+      // Check if user has a character
+      const characterResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/characters/me`, {
+        headers: {
+          'Authorization': `Bearer ${data.access_token}`
+        }
+      });
+
+      if (characterResponse.ok) {
+        // Has character, go to dashboard
+        router.push('/dashboard');
+      } else {
+        // No character, go to onboarding
+        router.push('/onboarding');
+      }
     } catch (err) {
-      setError('Email ou mot de passe incorrect');
+      setError(err instanceof Error ? err.message : 'Email ou mot de passe incorrect');
     } finally {
       setIsLoading(false);
     }

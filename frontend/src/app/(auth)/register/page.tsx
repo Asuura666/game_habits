@@ -41,30 +41,48 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      // Mock registration - replace with actual API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
-      // Mock user data
-      const mockUser: UserType = {
-        id: '1',
-        email,
-        username,
-        level: 1,
-        xp: 0,
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          username,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Erreur lors de l\'inscription');
+      }
+
+      // Map API response to User type
+      const user: UserType = {
+        id: data.user.id,
+        email: data.user.email,
+        username: data.user.username,
+        level: data.user.level || 1,
+        xp: data.user.total_xp || 0,
         xpToNextLevel: 100,
-        gold: 50,
+        gold: data.user.coins || 0,
         hp: 100,
         maxHp: 100,
         mana: 50,
         maxMana: 50,
         streak: 0,
-        createdAt: new Date().toISOString(),
+        avatarUrl: data.user.avatar_url,
+        createdAt: data.user.created_at,
       };
 
-      login(mockUser, 'mock-access-token', 'mock-refresh-token');
-      router.push('/dashboard');
+      login(user, data.access_token, data.access_token);
+      
+      // Redirect to onboarding to create character
+      router.push('/onboarding');
     } catch (err) {
-      setError('Une erreur est survenue. Veuillez réessayer.');
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue. Veuillez réessayer.');
     } finally {
       setIsLoading(false);
     }

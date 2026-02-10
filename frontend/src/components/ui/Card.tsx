@@ -5,7 +5,7 @@ import { motion, HTMLMotionProps } from 'framer-motion';
 
 interface CardProps extends HTMLMotionProps<'div'> {
   variant?: 'default' | 'elevated' | 'bordered';
-  padding?: 'none' | 'sm' | 'md' | 'lg';
+  padding?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
   hover?: boolean;
 }
 
@@ -28,6 +28,7 @@ export function Card({
     sm: 'p-3',
     md: 'p-4',
     lg: 'p-6',
+    xl: 'p-8',
   };
 
   return (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
@@ -8,7 +8,8 @@ import { useAuthStore } from '@/stores/authStore';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated, isLoading, setLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, setLoading, checkCharacter, hasCharacter } = useAuthStore();
+  const [isCheckingCharacter, setIsCheckingCharacter] = useState(true);
 
   useEffect(() => {
     // Check if user data exists in localStorage
@@ -24,15 +25,35 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, isLoading, router]);
 
-  if (isLoading) {
+  // Check for character after authentication
+  useEffect(() => {
+    const verifyCharacter = async () => {
+      if (isAuthenticated && !isLoading) {
+        setIsCheckingCharacter(true);
+        const hasChar = await checkCharacter();
+        setIsCheckingCharacter(false);
+        
+        if (!hasChar) {
+          router.push('/onboarding');
+        }
+      }
+    };
+
+    verifyCharacter();
+  }, [isAuthenticated, isLoading, checkCharacter, router]);
+
+  if (isLoading || isCheckingCharacter) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Chargement...</p>
+        </div>
       </div>
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !hasCharacter) {
     return null;
   }
 
