@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Sword, Zap, Heart, Star, Award, Crown, Sparkles, Target, Loader2, Package, Shirt, CircleDot } from 'lucide-react';
 import { Card, ProgressBar, Badge, Button } from '@/components/ui';
-import { SpriteAvatar, AVATAR_PRESETS } from '@/components/character';
+import { LPCCharacter } from '@/components/character';
 import { useAuthStore } from '@/stores/authStore';
 import { cn, getRarityColor } from '@/lib/utils';
 import Link from 'next/link';
@@ -170,6 +170,11 @@ export default function CharacterPage() {
   const classData = classInfo[character.character_class] || classInfo.warrior;
   const ClassIcon = classData.icon;
 
+  // Determine gender from avatar_id (format: "class_gender" or just use default)
+  const avatarGender = character.avatar_id?.includes('_f') ? 'female' : 
+                       character.avatar_id?.includes('_m') ? 'male' : 
+                       (character.character_class === 'mage' || character.character_class === 'assassin') ? 'female' : 'male';
+
   // Calculate total stats with equipment bonus
   const baseStats = character.stats;
   const equipBonus = equippedItems?.total_stats_bonus || {};
@@ -200,19 +205,17 @@ export default function CharacterPage() {
         {/* Character Card */}
         <motion.div variants={itemVariants} className="lg:col-span-1">
           <Card variant="bordered" padding="lg" className="text-center">
-            {/* Avatar */}
+            {/* Avatar with LPC Sprites */}
             <div className="relative inline-block mb-4">
-              <SpriteAvatar
+              <LPCCharacter
                 characterClass={character.character_class}
-                size="xl"
+                gender={avatarGender}
+                level={character.level}
+                size="2xl"
+                showLevel={true}
+                animated={true}
                 className="mx-auto"
               />
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2">
-                <Badge variant="info" className="gap-1">
-                  <Crown className="w-3 h-3" />
-                  Niveau {character.level}
-                </Badge>
-              </div>
             </div>
 
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
@@ -228,6 +231,10 @@ export default function CharacterPage() {
             <div className={cn('flex items-center justify-center gap-2 mb-6', classData.color)}>
               <ClassIcon className="w-5 h-5" />
               <span className="font-medium">{classData.name}</span>
+              <Badge variant="info" className="gap-1 ml-2">
+                <Crown className="w-3 h-3" />
+                Niveau {character.level}
+              </Badge>
             </div>
 
             {/* XP Progress */}
