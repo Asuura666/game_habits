@@ -1,45 +1,95 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Mail, Lock, Flame, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Flame, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { Button, Input, Card } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import type { User } from '@/types';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuthStore();
+  const { login, isAuthenticated } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [debugInfo, setDebugInfo] = useState('');
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push('/dashboard');
+    }
+  }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    // Clear previous errors
     setError('');
+    setDebugInfo('');
+    
+    // Basic validation
+    if (!email || !email.includes('@')) {
+      setError('Veuillez entrer une adresse email valide');
+      return;
+    }
+    
+    if (!password || password.length < 6) {
+      setError('Le mot de passe doit contenir au moins 6 caractères');
+      return;
+    }
+
     setIsLoading(true);
+    
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    console.log('[Login] API URL:', apiUrl);
+    console.log('[Login] Attempting login for:', email);
 
     try {
       // Login API call
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+      const loginUrl = `${apiUrl}/auth/login`;
+      console.log('[Login] Fetching:', loginUrl);
+      
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: email,
+          email: email.trim().toLowerCase(),
           password: password,
         }),
       });
 
-      const data = await response.json();
+      console.log('[Login] Response status:', response.status);
+      
+      let data;
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+        console.log('[Login] Response data:', JSON.stringify(data).substring(0, 200));
+      } else {
+        const text = await response.text();
+        console.log('[Login] Non-JSON response:', text.substring(0, 200));
+        throw new Error('Réponse invalide du serveur');
+      }
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Email ou mot de passe incorrect');
+        const errorMsg = data?.detail || data?.message || `Erreur ${response.status}`;
+        console.log('[Login] Error from API:', errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      if (!data.access_token || !data.user) {
+        console.log('[Login] Invalid response structure:', data);
+        throw new Error('Réponse invalide: token ou utilisateur manquant');
       }
 
       // Map API response to User type
@@ -60,24 +110,39 @@ export default function LoginPage() {
         createdAt: data.user.created_at,
       };
 
+      console.log('[Login] User mapped:', user.username);
       login(user, data.access_token, data.access_token);
       
       // Check if user has a character
-      const characterResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/characters/me`, {
+      console.log('[Login] Checking character...');
+      const characterResponse = await fetch(`${apiUrl}/characters/me`, {
         headers: {
           'Authorization': `Bearer ${data.access_token}`
         }
       });
 
+      console.log('[Login] Character check status:', characterResponse.status);
+
       if (characterResponse.ok) {
-        // Has character, go to dashboard
+        console.log('[Login] Has character, redirecting to dashboard');
         router.push('/dashboard');
       } else {
-        // No character, go to onboarding
+        console.log('[Login] No character, redirecting to onboarding');
         router.push('/onboarding');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Email ou mot de passe incorrect');
+      console.error('[Login] Error:', err);
+      
+      let errorMessage = 'Une erreur est survenue';
+      
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        errorMessage = 'Impossible de contacter le serveur. Vérifiez votre connexion.';
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+      setDebugInfo(`API: ${apiUrl || 'non défini'}`);
     } finally {
       setIsLoading(false);
     }
@@ -107,45 +172,68 @@ export default function LoginPage() {
             <p className="text-gray-400">Connectez-vous pour continuer votre quête</p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+          {/* Form - noValidate to disable browser validation */}
+          <form onSubmit={handleSubmit} className="space-y-5" noValidate autoComplete="off">
             {error && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+                className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-start gap-2"
               >
-                {error}
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <p>{error}</p>
+                  {debugInfo && (
+                    <p className="text-xs text-red-400/60 mt-1">{debugInfo}</p>
+                  )}
+                </div>
               </motion.div>
             )}
 
-            <Input
-              label="Email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="votre@email.com"
-              icon={<Mail className="w-5 h-5" />}
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                Email
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <input
+                  type="text"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setError(''); }}
+                  placeholder="votre@email.com"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border bg-gray-800 text-white placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-gray-600"
+                />
+              </div>
+            </div>
 
-            <div className="relative">
-              <Input
-                label="Mot de passe"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                icon={<Lock className="w-5 h-5" />}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-9 text-gray-400 hover:text-gray-300"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                Mot de passe
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-12 py-2.5 rounded-lg border bg-gray-800 text-white placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-gray-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center justify-between text-sm">
