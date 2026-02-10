@@ -13,6 +13,7 @@ import {
   Swords,
   Users,
   Trophy,
+  Award,
   BarChart3,
   LogOut,
   Flame,
@@ -29,6 +30,7 @@ const navItems = [
   { href: '/combat', icon: Swords, label: 'Combat' },
   { href: '/friends', icon: Users, label: 'Amis' },
   { href: '/leaderboard', icon: Trophy, label: 'Classement' },
+  { href: '/badges', icon: Award, label: 'Badges' },
   { href: '/stats', icon: BarChart3, label: 'Statistiques' },
 ];
 
