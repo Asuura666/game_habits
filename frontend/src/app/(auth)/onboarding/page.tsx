@@ -12,9 +12,11 @@ import {
   ArrowRight,
   ArrowLeft,
   Sparkles,
-  Check
+  Check,
+  User
 } from 'lucide-react';
 import { Button, Card, Input } from '@/components/ui';
+import { SpriteAvatar, getPresetsForClass, type SpriteConfig } from '@/components/character';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 
@@ -79,10 +81,12 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [characterName, setCharacterName] = useState('');
   const [selectedClass, setSelectedClass] = useState<CharacterClass | null>(null);
+  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
+  const [avatarConfig, setAvatarConfig] = useState<SpriteConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const totalSteps = 3;
+  const totalSteps = 4;
 
   const handleNext = () => {
     if (step === 1 && !characterName.trim()) {
@@ -92,6 +96,14 @@ export default function OnboardingPage() {
     if (step === 2 && !selectedClass) {
       setError('Choisis une classe');
       return;
+    }
+    if (step === 3 && !selectedAvatar) {
+      // Auto-select first avatar if none selected
+      const presets = selectedClass ? getPresetsForClass(selectedClass) : [];
+      if (presets.length > 0) {
+        setSelectedAvatar(presets[0].id);
+        setAvatarConfig(presets[0].config);
+      }
     }
     setError('');
     setStep(prev => Math.min(prev + 1, totalSteps));
@@ -120,7 +132,8 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           name: characterName.trim(),
           character_class: selectedClass,
-          stats: selectedClassData?.stats || {}
+          stats: selectedClassData?.stats || {},
+          avatar_id: selectedAvatar || 'default'
         })
       });
 
@@ -142,6 +155,7 @@ export default function OnboardingPage() {
   };
 
   const selectedClassData = CLASSES.find(c => c.id === selectedClass);
+  const avatarPresets = selectedClass ? getPresetsForClass(selectedClass) : [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
@@ -149,7 +163,7 @@ export default function OnboardingPage() {
         {/* Progress bar */}
         <div className="mb-8">
           <div className="flex justify-between mb-2">
-            {[1, 2, 3].map(s => (
+            {[1, 2, 3, 4].map(s => (
               <div
                 key={s}
                 className={cn(
@@ -254,7 +268,12 @@ export default function OnboardingPage() {
                     return (
                       <motion.button
                         key={cls.id}
-                        onClick={() => setSelectedClass(cls.id)}
+                        onClick={() => {
+                          setSelectedClass(cls.id);
+                          // Reset avatar when class changes
+                          setSelectedAvatar(null);
+                          setAvatarConfig(null);
+                        }}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         className={cn(
@@ -303,10 +322,86 @@ export default function OnboardingPage() {
             </motion.div>
           )}
 
-          {/* Step 3: Confirmation */}
-          {step === 3 && selectedClassData && (
+          {/* Step 3: Avatar */}
+          {step === 3 && selectedClass && (
             <motion.div
               key="step3"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <Card variant="elevated" padding="xl" className="bg-gray-800/80 backdrop-blur border-gray-700">
+                <div className="text-center mb-8">
+                  <h1 className="text-3xl font-bold text-white mb-2">
+                    Choisis ton apparence
+                  </h1>
+                  <p className="text-gray-400">
+                    Personnalise ton avatar de {selectedClassData?.name}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap justify-center gap-6 mb-8">
+                  {avatarPresets.map(preset => (
+                    <motion.button
+                      key={preset.id}
+                      onClick={() => {
+                        setSelectedAvatar(preset.id);
+                        setAvatarConfig(preset.config);
+                      }}
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={cn(
+                        'p-2 rounded-xl transition-all',
+                        selectedAvatar === preset.id
+                          ? 'ring-4 ring-primary-500 bg-gray-700'
+                          : 'hover:bg-gray-700/50'
+                      )}
+                    >
+                      <SpriteAvatar
+                        config={preset.config}
+                        characterClass={preset.class}
+                        size="xl"
+                      />
+                    </motion.button>
+                  ))}
+                </div>
+
+                {/* Preview */}
+                {selectedAvatar && avatarConfig && (
+                  <div className="text-center p-6 bg-gray-900/50 rounded-xl">
+                    <SpriteAvatar
+                      config={avatarConfig}
+                      characterClass={selectedClass}
+                      size="xl"
+                      className="mx-auto mb-4"
+                    />
+                    <p className="text-white font-bold">{characterName}</p>
+                    <p className="text-gray-400 text-sm">{selectedClassData?.name}</p>
+                  </div>
+                )}
+
+                {error && (
+                  <p className="mt-4 text-red-400 text-sm text-center">{error}</p>
+                )}
+
+                <div className="mt-8 flex justify-between">
+                  <Button variant="ghost" onClick={handleBack} className="gap-2">
+                    <ArrowLeft className="w-4 h-4" />
+                    Retour
+                  </Button>
+                  <Button onClick={handleNext} className="gap-2">
+                    Continuer
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* Step 4: Confirmation */}
+          {step === 4 && selectedClassData && (
+            <motion.div
+              key="step4"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -323,12 +418,20 @@ export default function OnboardingPage() {
 
                 <div className="bg-gray-900/50 rounded-2xl p-6 mb-6">
                   <div className="flex items-center gap-6">
-                    <div className={cn(
-                      'w-24 h-24 rounded-xl bg-gradient-to-br flex items-center justify-center',
-                      selectedClassData.color
-                    )}>
-                      <selectedClassData.icon className="w-12 h-12 text-white" />
-                    </div>
+                    {avatarConfig ? (
+                      <SpriteAvatar
+                        config={avatarConfig}
+                        characterClass={selectedClass!}
+                        size="xl"
+                      />
+                    ) : (
+                      <div className={cn(
+                        'w-24 h-24 rounded-xl bg-gradient-to-br flex items-center justify-center',
+                        selectedClassData.color
+                      )}>
+                        <selectedClassData.icon className="w-12 h-12 text-white" />
+                      </div>
+                    )}
                     
                     <div>
                       <h2 className="text-2xl font-bold text-white">{characterName}</h2>

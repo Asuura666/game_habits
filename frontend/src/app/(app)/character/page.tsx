@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Sword, Zap, Heart, Star, Award, Crown, Sparkles, Target, Loader2 } from 'lucide-react';
 import { Card, ProgressBar, Badge } from '@/components/ui';
+import { SpriteAvatar, AVATAR_PRESETS } from '@/components/character';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 
@@ -145,12 +146,11 @@ export default function CharacterPage() {
           <Card variant="bordered" padding="lg" className="text-center">
             {/* Avatar */}
             <div className="relative inline-block mb-4">
-              <div className={cn(
-                "w-32 h-32 rounded-full bg-gradient-to-br flex items-center justify-center mx-auto",
-                classData.bgColor
-              )}>
-                <ClassIcon className="w-16 h-16 text-white" />
-              </div>
+              <SpriteAvatar
+                characterClass={character.character_class}
+                size="xl"
+                className="mx-auto"
+              />
               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2">
                 <Badge variant="info" className="gap-1">
                   <Crown className="w-3 h-3" />
