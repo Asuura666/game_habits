@@ -13,9 +13,9 @@ COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
 # Install dependencies based on lockfile
 RUN \
   if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-  elif [ -f package-lock.json ]; then npm ci; \
+  elif [ -f package-lock.json ]; then npm ci --legacy-peer-deps; \
   elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
-  else npm install; \
+  else npm install --legacy-peer-deps; \
   fi
 
 # Stage 2: Builder
