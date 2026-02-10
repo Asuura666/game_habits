@@ -1,4 +1,6 @@
 """FastAPI main application."""
+from app.logging_config import configure_logging
+from app.middleware.logging_middleware import RequestLoggingMiddleware
 
 from contextlib import asynccontextmanager
 
@@ -23,6 +25,9 @@ async def lifespan(app: FastAPI):
     await close_db()
 
 
+
+# Configure structured logging
+configure_logging()
 app = FastAPI(
     title=settings.app_name,
     version="1.0.0",
@@ -40,6 +45,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Request logging middleware
+app.add_middleware(RequestLoggingMiddleware)
 
 # Prometheus metrics
 Instrumentator().instrument(app).expose(app, endpoint="/api/metrics")
