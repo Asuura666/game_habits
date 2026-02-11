@@ -101,6 +101,7 @@ async def health_detailed():
 
 # Import routers
 from app.routers import auth as auth_module
+from app.routers import admin
 from app.routers import users as users_module
 from app.routers import habits as habits_module
 from app.routers import tasks as tasks_module
@@ -126,6 +127,7 @@ app.include_router(completions_module.router, prefix="/api")
 # Gamification
 app.include_router(characters_module.router, prefix="/api")
 app.include_router(shop_module.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 app.include_router(inventory_module.router, prefix="/api")
 # app.include_router(combat_module.router, prefix="/api")
 app.include_router(badges_module.router, prefix="/api")
