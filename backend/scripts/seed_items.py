@@ -461,3 +461,224 @@ async def seed_items():
 
 if __name__ == "__main__":
     asyncio.run(seed_items())
+
+# ============ NEW LPC SPRITE ITEMS ============
+LPC_ITEMS = [
+    # === WEAPONS (LPC sprites) ===
+    {
+        "name": "Épée longue",
+        "description": "Une épée classique de chevalier.",
+        "category": "weapon",
+        "rarity": "uncommon",
+        "price": 150,
+        "strength_bonus": 6,
+        "sprite_url": "/sprites/shop/weapons/longsword.png",
+        "sprite_layer": "/sprites/shop/weapons/longsword.png",
+    },
+    {
+        "name": "Rapière élégante",
+        "description": "Une lame fine pour les duellistes.",
+        "category": "weapon",
+        "rarity": "rare",
+        "price": 220,
+        "agility_bonus": 7,
+        "strength_bonus": 3,
+        "sprite_url": "/sprites/shop/weapons/rapier.png",
+        "sprite_layer": "/sprites/shop/weapons/rapier.png",
+    },
+    {
+        "name": "Sabre de pirate",
+        "description": "Courbe et tranchant comme un sourire.",
+        "category": "weapon",
+        "rarity": "uncommon",
+        "price": 140,
+        "strength_bonus": 5,
+        "agility_bonus": 2,
+        "sprite_url": "/sprites/shop/weapons/saber.png",
+        "sprite_layer": "/sprites/shop/weapons/saber.png",
+    },
+    {
+        "name": "Dague de l'assassin",
+        "description": "Silencieuse et mortelle.",
+        "category": "weapon",
+        "rarity": "rare",
+        "price": 200,
+        "agility_bonus": 8,
+        "sprite_url": "/sprites/shop/weapons/dagger.png",
+        "sprite_layer": "/sprites/shop/weapons/dagger.png",
+    },
+    {
+        "name": "Masse d'armes",
+        "description": "Lourde et dévastatrice.",
+        "category": "weapon",
+        "rarity": "uncommon",
+        "price": 130,
+        "strength_bonus": 7,
+        "endurance_bonus": 1,
+        "sprite_url": "/sprites/shop/weapons/mace.png",
+        "sprite_layer": "/sprites/shop/weapons/mace.png",
+    },
+    {
+        "name": "Fléau d'armes",
+        "description": "Une chaîne, une boule, beaucoup de dégâts.",
+        "category": "weapon",
+        "rarity": "rare",
+        "price": 240,
+        "strength_bonus": 9,
+        "sprite_url": "/sprites/shop/weapons/flail.png",
+        "sprite_layer": "/sprites/shop/weapons/flail.png",
+    },
+    {
+        "name": "Hallebarde",
+        "description": "L'arme des gardes royaux.",
+        "category": "weapon",
+        "rarity": "epic",
+        "price": 380,
+        "strength_bonus": 10,
+        "agility_bonus": 3,
+        "sprite_url": "/sprites/shop/weapons/halberd.png",
+        "sprite_layer": "/sprites/shop/weapons/halberd.png",
+    },
+    
+    # === ARMOR (LPC sprites) ===
+    {
+        "name": "Armure de cuir noir",
+        "description": "Cuir tanné pour les rôdeurs.",
+        "category": "armor",
+        "rarity": "uncommon",
+        "price": 120,
+        "endurance_bonus": 4,
+        "agility_bonus": 2,
+        "sprite_url": "/sprites/shop/armor/leather_black.png",
+        "sprite_layer": "/sprites/shop/armor/leather_black.png",
+    },
+    {
+        "name": "Armure de cuir brun",
+        "description": "Protection classique de l'aventurier.",
+        "category": "armor",
+        "rarity": "uncommon",
+        "price": 110,
+        "endurance_bonus": 5,
+        "sprite_url": "/sprites/shop/armor/leather_brown.png",
+        "sprite_layer": "/sprites/shop/armor/leather_brown.png",
+    },
+    {
+        "name": "Armure de plates dorée",
+        "description": "Resplendissante et protectrice.",
+        "category": "armor",
+        "rarity": "epic",
+        "price": 450,
+        "endurance_bonus": 14,
+        "charisma_bonus": 3,
+        "sprite_url": "/sprites/shop/armor/plate_gold.png",
+        "sprite_layer": "/sprites/shop/armor/plate_gold.png",
+    },
+    {
+        "name": "Armure de plates argentée",
+        "description": "La marque des chevaliers nobles.",
+        "category": "armor",
+        "rarity": "epic",
+        "price": 420,
+        "endurance_bonus": 13,
+        "strength_bonus": 2,
+        "sprite_url": "/sprites/shop/armor/plate_silver.png",
+        "sprite_layer": "/sprites/shop/armor/plate_silver.png",
+    },
+    
+    # === LEGS (LPC sprites) ===
+    {
+        "name": "Pantalon turquoise",
+        "description": "Un pantalon élégant et confortable.",
+        "category": "accessory",
+        "rarity": "common",
+        "price": 50,
+        "agility_bonus": 1,
+        "sprite_url": "/sprites/shop/legs/pants_teal.png",
+        "sprite_layer": "/sprites/shop/legs/pants_teal.png",
+    },
+    {
+        "name": "Pantalon rouge",
+        "description": "Pour ceux qui n'ont pas peur des taches.",
+        "category": "accessory",
+        "rarity": "common",
+        "price": 50,
+        "charisma_bonus": 1,
+        "sprite_url": "/sprites/shop/legs/pants_red.png",
+        "sprite_layer": "/sprites/shop/legs/pants_red.png",
+    },
+    
+    # === FEET (LPC sprites) ===
+    {
+        "name": "Chaussures en cuir",
+        "description": "Des chaussures robustes pour la route.",
+        "category": "accessory",
+        "rarity": "common",
+        "price": 40,
+        "agility_bonus": 1,
+        "sprite_url": "/sprites/shop/feet/shoes_brown.png",
+        "sprite_layer": "/sprites/shop/feet/shoes_brown.png",
+    },
+    
+    # === HAIR (LPC sprites) ===
+    {
+        "name": "Coupe courte noire",
+        "description": "Style pratique et élégant.",
+        "category": "accessory",
+        "rarity": "uncommon",
+        "price": 80,
+        "charisma_bonus": 2,
+        "sprite_url": "/sprites/shop/hair/bangsshort_black.png",
+        "sprite_layer": "/sprites/shop/hair/bangsshort_black.png",
+    },
+    {
+        "name": "Queue de cheval rousse",
+        "description": "Flamboyante et dynamique.",
+        "category": "accessory",
+        "rarity": "rare",
+        "price": 150,
+        "charisma_bonus": 4,
+        "sprite_url": "/sprites/shop/hair/ponytail_red.png",
+        "sprite_layer": "/sprites/shop/hair/ponytail_red.png",
+    },
+]
+
+
+async def seed_lpc_items():
+    """Seed the database with LPC sprite items."""
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import sessionmaker
+    
+    async_session = sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+    
+    async with async_session() as db:
+        print(f"Adding {len(LPC_ITEMS)} LPC items...")
+        
+        for item_data in LPC_ITEMS:
+            item = Item(
+                id=uuid4(),
+                name=item_data["name"],
+                description=item_data.get("description"),
+                category=item_data["category"],
+                rarity=item_data["rarity"],
+                price=item_data["price"],
+                strength_bonus=item_data.get("strength_bonus", 0),
+                endurance_bonus=item_data.get("endurance_bonus", 0),
+                agility_bonus=item_data.get("agility_bonus", 0),
+                intelligence_bonus=item_data.get("intelligence_bonus", 0),
+                charisma_bonus=item_data.get("charisma_bonus", 0),
+                sprite_url=item_data.get("sprite_url"),
+                is_available=True,
+                is_limited=False,
+                required_level=1,
+            )
+            db.add(item)
+        
+        await db.commit()
+        print(f"✅ Successfully added {len(LPC_ITEMS)} LPC items!")
+
+
+if __name__ == "__main__":
+    # Add LPC items in addition to existing ones
+    asyncio.run(seed_lpc_items())

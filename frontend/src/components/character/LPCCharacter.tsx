@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { useSpriteAnimation } from '@/hooks/useSpriteAnimation';
 import {
   type CharacterClass,
   type SpriteAnimation,
@@ -11,6 +10,8 @@ import {
   getTierByLevel,
   getArmorByLevel,
   LPC_FRAME_SIZE,
+  LPC_ANIMATIONS,
+  LPC_DIRECTION_OFFSET,
 } from '@/types/character';
 
 // Sprite paths (layers)
@@ -41,30 +42,18 @@ const SIZES = {
 };
 
 interface LPCCharacterProps {
-  /** Classe du personnage */
-  characterClass?: CharacterClass | string;
-  /** Genre (override le défaut de la classe) */
-  gender?: 'male' | 'female';
-  /** Niveau (affecte armure et ring de rareté) */
-  level?: number;
-  /** Taille du composant */
-  size?: keyof typeof SIZES;
-  /** Afficher le badge de niveau */
-  showLevel?: boolean;
-  /** Animation à jouer (idle, walk, slash, etc.) */
-  animation?: SpriteAnimation;
-  /** Direction du sprite */
-  direction?: SpriteDirection;
-  /** URL du spritesheet complet (si fourni, ignore les layers) */
+  /** URL du spritesheet complet (ignoré pour l'instant, prêt pour future extension) */
   spriteSheetUrl?: string;
-  /** Activer les animations au hover */
+  characterClass?: CharacterClass | string;
+  gender?: 'male' | 'female';
+  level?: number;
+  size?: keyof typeof SIZES;
+  showLevel?: boolean;
+  animation?: SpriteAnimation;
+  direction?: SpriteDirection;
   animated?: boolean;
-  /** FPS de l'animation */
   fps?: number;
-  /** Classes CSS additionnelles */
   className?: string;
-  /** Callback quand l'animation se termine */
-  onAnimationComplete?: () => void;
 }
 
 export function LPCCharacter({
@@ -75,13 +64,15 @@ export function LPCCharacter({
   showLevel = false,
   animation = 'idle',
   direction = 'down',
-  spriteSheetUrl,
   animated = true,
+  spriteSheetUrl,
   fps = 8,
   className,
-  onAnimationComplete,
 }: LPCCharacterProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [frame, setFrame] = useState(0);
+  const animationRef = useRef<number | null>(null);
+  const lastFrameTime = useRef(0);
   
   const config = CLASS_CONFIG[characterClass as CharacterClass] || CLASS_CONFIG.warrior;
   const sizeConfig = SIZES[size];
@@ -90,27 +81,41 @@ export function LPCCharacter({
   const charGender = gender || config.defaultGender;
   const armorType = getArmorByLevel(level);
   
-  // Si on a un spritesheet complet, utiliser l'animation Canvas
-  const canvasRef = useSpriteAnimation({
-    spriteSheetUrl: spriteSheetUrl || null,
-    animation: isHovered && animated ? 'walk' : animation,
-    direction,
-    scale: sizeConfig.scale,
-    fps,
-    paused: !spriteSheetUrl,
-    onAnimationComplete,
-  });
+  // Current animation state
+  const currentAnim = isHovered && animated ? 'walk' : animation;
+  const animConfig = LPC_ANIMATIONS[currentAnim];
+  const dirOffset = currentAnim === 'hurt' ? 0 : LPC_DIRECTION_OFFSET[direction];
+  const row = animConfig.startRow + dirOffset;
 
-  // Sprite layer style (pour l'approche layers)
-  const spriteStyle = useMemo(() => ({
-    width: LPC_FRAME_SIZE,
-    height: LPC_FRAME_SIZE,
-    backgroundSize: `${13 * LPC_FRAME_SIZE}px auto`,
-    backgroundPosition: `0 -${2 * LPC_FRAME_SIZE}px`, // Idle = walk row, frame 0
-    imageRendering: 'pixelated' as const,
-  }), []);
+  // Animation loop
+  useEffect(() => {
+    if (!animated) return;
+    
+    const frameInterval = 1000 / fps;
+    
+    const animate = (timestamp: number) => {
+      if (timestamp - lastFrameTime.current >= frameInterval) {
+        lastFrameTime.current = timestamp;
+        setFrame(f => (f + 1) % animConfig.frames);
+      }
+      animationRef.current = requestAnimationFrame(animate);
+    };
+    
+    animationRef.current = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [animated, fps, animConfig.frames, currentAnim]);
 
-  // Récupérer les URLs des sprites
+  // Reset frame when animation changes
+  useEffect(() => {
+    setFrame(0);
+  }, [currentAnim]);
+
+  // Get sprite URLs
   const bodySprite = SPRITES.body[charGender];
   const hairSprite = charGender === 'female' && config.defaultHair === 'ponytail' 
     ? SPRITES.hair.ponytail 
@@ -119,13 +124,27 @@ export function LPCCharacter({
     ? SPRITES.armor[armorType]![charGender] 
     : null;
 
+  // Calculate sprite position
+  const spriteX = frame * LPC_FRAME_SIZE;
+  const spriteY = row * LPC_FRAME_SIZE;
+
+  const layerStyle = {
+    width: LPC_FRAME_SIZE,
+    height: LPC_FRAME_SIZE,
+    backgroundSize: `${13 * LPC_FRAME_SIZE}px auto`,
+    backgroundPosition: `-${spriteX}px -${spriteY}px`,
+    imageRendering: 'pixelated' as const,
+    transform: `scale(${sizeConfig.scale})`,
+    transformOrigin: 'top left',
+  };
+
   return (
     <div 
       className={cn('relative inline-flex flex-col items-center gap-2', className)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Character container avec ring de rareté */}
+      {/* Character container with rarity ring */}
       <div
         className={cn(
           'relative rounded-full overflow-hidden',
@@ -140,58 +159,43 @@ export function LPCCharacter({
           height: sizeConfig.container,
         }}
       >
-        {spriteSheetUrl ? (
-          // Mode Canvas (spritesheet complet avec animation)
-          <canvas
-            ref={canvasRef}
-            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-            style={{ imageRendering: 'pixelated' }}
-          />
-        ) : (
-          // Mode Layers (body + armor + hair superposés)
-          <div 
-            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+        {/* Sprite layers container */}
+        <div 
+          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+          style={{
+            width: LPC_FRAME_SIZE * sizeConfig.scale,
+            height: LPC_FRAME_SIZE * sizeConfig.scale,
+          }}
+        >
+          {/* Body layer */}
+          <div
+            className="absolute inset-0 bg-no-repeat"
             style={{
-              width: LPC_FRAME_SIZE * sizeConfig.scale,
-              height: LPC_FRAME_SIZE * sizeConfig.scale,
+              ...layerStyle,
+              backgroundImage: `url(${bodySprite})`,
             }}
-          >
-            {/* Body layer */}
+          />
+          
+          {/* Armor layer */}
+          {armorSprite && (
             <div
               className="absolute inset-0 bg-no-repeat"
               style={{
-                ...spriteStyle,
-                backgroundImage: `url(${bodySprite})`,
-                transform: `scale(${sizeConfig.scale})`,
-                transformOrigin: 'top left',
+                ...layerStyle,
+                backgroundImage: `url(${armorSprite})`,
               }}
             />
-            
-            {/* Armor layer */}
-            {armorSprite && (
-              <div
-                className="absolute inset-0 bg-no-repeat"
-                style={{
-                  ...spriteStyle,
-                  backgroundImage: `url(${armorSprite})`,
-                  transform: `scale(${sizeConfig.scale})`,
-                  transformOrigin: 'top left',
-                }}
-              />
-            )}
-            
-            {/* Hair layer */}
-            <div
-              className="absolute inset-0 bg-no-repeat"
-              style={{
-                ...spriteStyle,
-                backgroundImage: `url(${hairSprite})`,
-                transform: `scale(${sizeConfig.scale})`,
-                transformOrigin: 'top left',
-              }}
-            />
-          </div>
-        )}
+          )}
+          
+          {/* Hair layer */}
+          <div
+            className="absolute inset-0 bg-no-repeat"
+            style={{
+              ...layerStyle,
+              backgroundImage: `url(${hairSprite})`,
+            }}
+          />
+        </div>
 
         {/* Shine effect on hover */}
         {animated && (
