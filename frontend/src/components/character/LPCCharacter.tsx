@@ -1,14 +1,19 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useSpriteAnimation } from '@/hooks/useSpriteAnimation';
+import {
+  type CharacterClass,
+  type SpriteAnimation,
+  type SpriteDirection,
+  CLASS_CONFIG,
+  getTierByLevel,
+  getArmorByLevel,
+  LPC_FRAME_SIZE,
+} from '@/types/character';
 
-// LPC Spritesheet configuration
-// Standard LPC sprites are 64x64 per frame
-const FRAME_SIZE = 64;
-const IDLE_ROW = 2; // Row 2 is usually front-facing idle
-
-// Sprite paths
+// Sprite paths (layers)
 const SPRITES = {
   body: {
     male: '/sprites/body/male.png',
@@ -27,53 +32,40 @@ const SPRITES = {
   },
 };
 
-// Class configurations
-const CLASS_CONFIG: Record<string, {
-  defaultGender: 'male' | 'female';
-  defaultArmor: 'none' | 'robe' | 'leather' | 'plate';
-  defaultHair: string;
-  ringColor: string;
-}> = {
-  warrior: { defaultGender: 'male', defaultArmor: 'plate', defaultHair: 'male', ringColor: 'ring-red-500' },
-  mage: { defaultGender: 'female', defaultArmor: 'robe', defaultHair: 'ponytail', ringColor: 'ring-purple-500' },
-  ranger: { defaultGender: 'male', defaultArmor: 'leather', defaultHair: 'male', ringColor: 'ring-green-500' },
-  paladin: { defaultGender: 'male', defaultArmor: 'plate', defaultHair: 'male', ringColor: 'ring-yellow-500' },
-  assassin: { defaultGender: 'female', defaultArmor: 'leather', defaultHair: 'female', ringColor: 'ring-pink-500' },
-};
-
-// Equipment tier based on level
-const getArmorTier = (level: number): 'none' | 'robe' | 'leather' | 'plate' => {
-  if (level >= 15) return 'plate';
-  if (level >= 8) return 'leather';
-  if (level >= 3) return 'robe';
-  return 'none';
-};
-
-const getTierRing = (level: number) => {
-  if (level >= 20) return { ring: 'ring-yellow-400', glow: 'shadow-yellow-500/50', name: 'Légendaire' };
-  if (level >= 15) return { ring: 'ring-purple-400', glow: 'shadow-purple-500/50', name: 'Épique' };
-  if (level >= 10) return { ring: 'ring-blue-400', glow: 'shadow-blue-500/50', name: 'Rare' };
-  if (level >= 5) return { ring: 'ring-green-400', glow: 'shadow-green-500/50', name: 'Peu commun' };
-  return { ring: 'ring-gray-400', glow: '', name: 'Commun' };
-};
-
-interface LPCCharacterProps {
-  characterClass?: string;
-  gender?: 'male' | 'female';
-  level?: number;
-  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
-  showLevel?: boolean;
-  animated?: boolean;
-  className?: string;
-}
-
 const SIZES = {
   sm: { container: 48, scale: 0.75 },
   md: { container: 64, scale: 1 },
   lg: { container: 96, scale: 1.5 },
   xl: { container: 128, scale: 2 },
-  '2xl': { container: 160, scale: 2.5 },
+  '2xl': { container: 192, scale: 3 },
 };
+
+interface LPCCharacterProps {
+  /** Classe du personnage */
+  characterClass?: CharacterClass | string;
+  /** Genre (override le défaut de la classe) */
+  gender?: 'male' | 'female';
+  /** Niveau (affecte armure et ring de rareté) */
+  level?: number;
+  /** Taille du composant */
+  size?: keyof typeof SIZES;
+  /** Afficher le badge de niveau */
+  showLevel?: boolean;
+  /** Animation à jouer (idle, walk, slash, etc.) */
+  animation?: SpriteAnimation;
+  /** Direction du sprite */
+  direction?: SpriteDirection;
+  /** URL du spritesheet complet (si fourni, ignore les layers) */
+  spriteSheetUrl?: string;
+  /** Activer les animations au hover */
+  animated?: boolean;
+  /** FPS de l'animation */
+  fps?: number;
+  /** Classes CSS additionnelles */
+  className?: string;
+  /** Callback quand l'animation se termine */
+  onAnimationComplete?: () => void;
+}
 
 export function LPCCharacter({
   characterClass = 'warrior',
@@ -81,45 +73,66 @@ export function LPCCharacter({
   level = 1,
   size = 'lg',
   showLevel = false,
+  animation = 'idle',
+  direction = 'down',
+  spriteSheetUrl,
   animated = true,
+  fps = 8,
   className,
+  onAnimationComplete,
 }: LPCCharacterProps) {
-  const config = CLASS_CONFIG[characterClass] || CLASS_CONFIG.warrior;
+  const [isHovered, setIsHovered] = useState(false);
+  
+  const config = CLASS_CONFIG[characterClass as CharacterClass] || CLASS_CONFIG.warrior;
   const sizeConfig = SIZES[size];
-  const tierConfig = getTierRing(level);
+  const tierConfig = getTierByLevel(level);
   
-  // Determine character properties
   const charGender = gender || config.defaultGender;
-  const armorType = getArmorTier(level);
+  const armorType = getArmorByLevel(level);
   
-  // Get sprite URLs
+  // Si on a un spritesheet complet, utiliser l'animation Canvas
+  const canvasRef = useSpriteAnimation({
+    spriteSheetUrl: spriteSheetUrl || null,
+    animation: isHovered && animated ? 'walk' : animation,
+    direction,
+    scale: sizeConfig.scale,
+    fps,
+    paused: !spriteSheetUrl,
+    onAnimationComplete,
+  });
+
+  // Sprite layer style (pour l'approche layers)
+  const spriteStyle = useMemo(() => ({
+    width: LPC_FRAME_SIZE,
+    height: LPC_FRAME_SIZE,
+    backgroundSize: `${13 * LPC_FRAME_SIZE}px auto`,
+    backgroundPosition: `0 -${2 * LPC_FRAME_SIZE}px`, // Idle = walk row, frame 0
+    imageRendering: 'pixelated' as const,
+  }), []);
+
+  // Récupérer les URLs des sprites
   const bodySprite = SPRITES.body[charGender];
   const hairSprite = charGender === 'female' && config.defaultHair === 'ponytail' 
     ? SPRITES.hair.ponytail 
     : SPRITES.hair[charGender];
   const armorSprite = armorType !== 'none' && SPRITES.armor[armorType] 
-    ? SPRITES.armor[armorType][charGender] 
+    ? SPRITES.armor[armorType]![charGender] 
     : null;
 
-  // Sprite layer style - shows single frame from spritesheet
-  const spriteStyle = useMemo(() => ({
-    width: FRAME_SIZE,
-    height: FRAME_SIZE,
-    backgroundSize: `${13 * FRAME_SIZE}px auto`, // 13 columns in LPC sheet
-    backgroundPosition: `0 -${IDLE_ROW * FRAME_SIZE}px`, // Front-facing idle
-    imageRendering: 'pixelated' as const,
-  }), []);
-
   return (
-    <div className={cn('relative inline-flex flex-col items-center gap-2', className)}>
-      {/* Character container */}
+    <div 
+      className={cn('relative inline-flex flex-col items-center gap-2', className)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Character container avec ring de rareté */}
       <div
         className={cn(
           'relative rounded-full overflow-hidden',
           'ring-4',
           tierConfig.ring,
           tierConfig.glow && `shadow-lg ${tierConfig.glow}`,
-          'bg-gray-800',
+          'bg-gradient-to-br from-gray-700 to-gray-900',
           animated && 'transition-all duration-300 hover:scale-110',
         )}
         style={{
@@ -127,53 +140,62 @@ export function LPCCharacter({
           height: sizeConfig.container,
         }}
       >
-        {/* Sprite layers container */}
-        <div 
-          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-          style={{
-            width: FRAME_SIZE * sizeConfig.scale,
-            height: FRAME_SIZE * sizeConfig.scale,
-          }}
-        >
-          {/* Body layer */}
-          <div
-            className="absolute inset-0 bg-no-repeat"
-            style={{
-              ...spriteStyle,
-              backgroundImage: `url(${bodySprite})`,
-              transform: `scale(${sizeConfig.scale})`,
-              transformOrigin: 'top left',
-            }}
+        {spriteSheetUrl ? (
+          // Mode Canvas (spritesheet complet avec animation)
+          <canvas
+            ref={canvasRef}
+            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+            style={{ imageRendering: 'pixelated' }}
           />
-          
-          {/* Armor layer */}
-          {armorSprite && (
+        ) : (
+          // Mode Layers (body + armor + hair superposés)
+          <div 
+            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+            style={{
+              width: LPC_FRAME_SIZE * sizeConfig.scale,
+              height: LPC_FRAME_SIZE * sizeConfig.scale,
+            }}
+          >
+            {/* Body layer */}
             <div
               className="absolute inset-0 bg-no-repeat"
               style={{
                 ...spriteStyle,
-                backgroundImage: `url(${armorSprite})`,
+                backgroundImage: `url(${bodySprite})`,
                 transform: `scale(${sizeConfig.scale})`,
                 transformOrigin: 'top left',
               }}
             />
-          )}
-          
-          {/* Hair layer */}
-          <div
-            className="absolute inset-0 bg-no-repeat"
-            style={{
-              ...spriteStyle,
-              backgroundImage: `url(${hairSprite})`,
-              transform: `scale(${sizeConfig.scale})`,
-              transformOrigin: 'top left',
-            }}
-          />
-        </div>
+            
+            {/* Armor layer */}
+            {armorSprite && (
+              <div
+                className="absolute inset-0 bg-no-repeat"
+                style={{
+                  ...spriteStyle,
+                  backgroundImage: `url(${armorSprite})`,
+                  transform: `scale(${sizeConfig.scale})`,
+                  transformOrigin: 'top left',
+                }}
+              />
+            )}
+            
+            {/* Hair layer */}
+            <div
+              className="absolute inset-0 bg-no-repeat"
+              style={{
+                ...spriteStyle,
+                backgroundImage: `url(${hairSprite})`,
+                transform: `scale(${sizeConfig.scale})`,
+                transformOrigin: 'top left',
+              }}
+            />
+          </div>
+        )}
 
-        {/* Shine effect */}
+        {/* Shine effect on hover */}
         {animated && (
-          <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 opacity-0 hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 opacity-0 hover:opacity-100 transition-opacity duration-300" />
         )}
       </div>
 
@@ -185,6 +207,7 @@ export function LPCCharacter({
           tierConfig.ring.replace('ring-', 'border-'),
           'rounded-full px-2 py-0.5',
           'text-xs font-bold text-white',
+          'shadow-lg',
         )}>
           {level}
         </div>
@@ -193,5 +216,4 @@ export function LPCCharacter({
   );
 }
 
-// Export types for customization
 export type { LPCCharacterProps };
