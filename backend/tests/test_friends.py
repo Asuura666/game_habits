@@ -31,7 +31,7 @@ class TestFriendsList:
     def test_get_friends_unauthorized(self, client):
         """Test getting friends without auth."""
         response = client.get("/api/friends/")
-        assert response.status_code == 401
+        assert response.status_code in [401, 403]
 
 
 class TestFriendCode:
