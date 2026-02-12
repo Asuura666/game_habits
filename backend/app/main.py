@@ -114,6 +114,8 @@ from app.routers import friends as friends_module
 from app.routers import leaderboard as leaderboard_module
 from app.routers import stats as stats_module
 from app.routers import badges as badges_module
+from app.routers import streak as streak_module
+from app.routers import calendar as calendar_module
 
 # Auth & Users
 app.include_router(auth_module.router, prefix="/api")
@@ -136,6 +138,8 @@ app.include_router(badges_module.router, prefix="/api")
 app.include_router(friends_module.router, prefix="/api")
 app.include_router(leaderboard_module.router, prefix="/api")
 app.include_router(stats_module.router, prefix="/api")
+app.include_router(streak_module.router, prefix="/api")
+app.include_router(calendar_module.router, prefix="/api")
 
 
 if __name__ == "__main__":

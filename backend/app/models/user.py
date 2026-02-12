@@ -50,6 +50,15 @@ class User(Base, UUIDMixin, TimestampMixin):
     last_activity_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     streak_freeze_available: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     
+    # Streak Freeze System
+    last_free_freeze: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    freeze_count_month: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    streak_frozen_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    
     # Social
     friend_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
