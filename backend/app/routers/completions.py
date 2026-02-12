@@ -27,6 +27,8 @@ from app.schemas.completion import (
     CompletionResult,
     CompletionWithResult,
     DailyCompletionSummary,
+    CompletionBackfill,
+    CompletionType,
 )
 from app.services.streak_service import update_streak, get_streak_multiplier
 from app.services.xp_service import calculate_habit_xp, add_xp
@@ -252,6 +254,98 @@ async def delete_completion(
         xp_reverted=completion.xp_earned,
     )
 
+
+
+
+@router.post(
+    "/backfill",
+    response_model=CompletionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Backfill a past completion",
+    description="Add a completion for a past date (max 30 days ago). XP reduced by 50%.",
+)
+async def backfill_completion(
+    data: CompletionBackfill,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> CompletionResponse:
+    """Backfill a habit completion for a past date."""
+    from datetime import timedelta
+    
+    today_date = date.today()
+    if data.completed_date > today_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot complete habits in the future",
+        )
+    
+    max_past = today_date - timedelta(days=30)
+    if data.completed_date < max_past:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Can only backfill completions from the last 30 days",
+        )
+    
+    result = await db.execute(
+        select(Habit).where(
+            and_(Habit.id == data.habit_id, Habit.user_id == current_user.id)
+        )
+    )
+    habit = result.scalar_one_or_none()
+    
+    if not habit:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Habit not found")
+    
+    existing = await db.execute(
+        select(Completion).where(
+            and_(Completion.habit_id == habit.id, Completion.completed_date == data.completed_date)
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Habit already completed on {data.completed_date}",
+        )
+    
+    base_xp = 10  # Default XP for backfill
+    xp_earned = int(base_xp * 0.5)
+    coins_earned = int(xp_earned * 0.5)
+    
+    completion = Completion(
+        habit_id=habit.id,
+        user_id=current_user.id,
+        completed_date=data.completed_date,
+        value=1,
+        note=data.notes,
+        xp_earned=xp_earned,
+        coins_earned=coins_earned,
+        streak_multiplier=Decimal("1.0"),
+    )
+    
+    db.add(completion)
+    current_user.total_xp += xp_earned
+    current_user.coins += coins_earned
+    habit.total_completions += 1
+    
+    await db.commit()
+    await db.refresh(completion)
+    
+    logger.info("Backfill created", habit_id=str(habit.id), date=str(data.completed_date))
+    
+    return CompletionResponse(
+        id=completion.id,
+        user_id=completion.user_id,
+        completion_type=CompletionType.HABIT,
+        habit_id=completion.habit_id,
+        task_id=None,
+        xp_earned=completion.xp_earned,
+        coins_earned=completion.coins_earned,
+        streak_at_completion=0,
+        notes=completion.note,
+        mood_rating=None,
+        difficulty_rating=None,
+        completed_at=datetime.combine(completion.completed_date, datetime.min.time()),
+    )
 
 @router.get(
     "/today",

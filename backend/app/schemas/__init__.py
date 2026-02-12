@@ -48,6 +48,7 @@ from app.schemas.completion import (
     CompletionResult,
     CompletionResponse,
     CompletionWithResult,
+    CompletionBackfill,
     DailyCompletionSummary,
 )
 

@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { BarChart3, TrendingUp, Target, CheckSquare, Flame, Trophy, Calendar, Sparkles } from 'lucide-react';
 import { Card, ProgressBar, Badge } from '@/components/ui';
+import { CalendarHeatmap } from '@/components/habits';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 import type { UserStats, DailyStats } from '@/types';
@@ -198,6 +199,11 @@ export default function StatsPage() {
       </div>
 
       {/* Achievements */}
+      {/* Calendar Heatmap */}
+      <motion.div variants={itemVariants}>
+        <CalendarHeatmap />
+      </motion.div>
+
       <motion.div variants={itemVariants}>
         <Card variant="bordered" padding="lg">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-2">

@@ -1,20 +1,36 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
+import { Card, CardContent } from '@/components/ui';
 import { Button } from '@/components/ui';
 import { Input } from '@/components/ui';
 import { Badge } from '@/components/ui';
-import { ChevronRight, ChevronDown, Image, Download, Plus, Search, Loader2, FolderOpen, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Plus, Search, Loader2, FolderOpen, ArrowLeft, Swords, User, Shirt, CircleUser } from 'lucide-react';
 
-const GITHUB_API = 'https://api.github.com/repos/sanderfrenken/Universal-LPC-Spritesheet-Character-Generator/contents/spritesheets';
-const GITHUB_RAW = 'https://raw.githubusercontent.com/sanderfrenken/Universal-LPC-Spritesheet-Character-Generator/master/spritesheets';
+const GITHUB_REPO = 'LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator';
+const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/contents`;
+const GITHUB_RAW = `https://raw.githubusercontent.com/${GITHUB_REPO}/master`;
 
-interface FileNode {
+// Catégories principales comme dans le générateur
+const CATEGORIES = [
+  { id: 'body', name: 'Corps', icon: User, color: 'bg-orange-500' },
+  { id: 'hair', name: 'Cheveux', icon: CircleUser, color: 'bg-yellow-500' },
+  { id: 'torso', name: 'Torse', icon: Shirt, color: 'bg-blue-500' },
+  { id: 'legs', name: 'Jambes', icon: User, color: 'bg-green-500' },
+  { id: 'feet', name: 'Pieds', icon: User, color: 'bg-purple-500' },
+  { id: 'head', name: 'Tête', icon: CircleUser, color: 'bg-pink-500' },
+  { id: 'weapons', name: 'Armes', icon: Swords, color: 'bg-red-500' },
+  { id: 'arms', name: 'Bras', icon: User, color: 'bg-cyan-500' },
+];
+
+interface ItemDefinition {
   name: string;
-  path: string;
-  type: 'file' | 'dir';
-  download_url?: string;
+  fileName: string;
+  category: string;
+  subcategory?: string;
+  spritePath: string;
+  previewUrl: string;
+  variants?: string[];
 }
 
 interface SpriteExplorerProps {
@@ -22,100 +38,155 @@ interface SpriteExplorerProps {
 }
 
 export function SpriteExplorer({ onSelectSprite }: SpriteExplorerProps) {
-  const [currentPath, setCurrentPath] = useState('');
-  const [contents, setContents] = useState<FileNode[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [subcategories, setSubcategories] = useState<string[]>([]);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
+  const [items, setItems] = useState<ItemDefinition[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedSprite, setSelectedSprite] = useState<FileNode | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ItemDefinition | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [downloading, setDownloading] = useState(false);
+  const [allItems, setAllItems] = useState<ItemDefinition[]>([]);
 
-  // Charger le contenu d'un dossier
-  const loadDirectory = async (path: string) => {
+  // Charger les sous-catégories d'une catégorie
+  const loadCategory = async (categoryId: string) => {
     setLoading(true);
     setError(null);
+    setSelectedCategory(categoryId);
+    setSelectedSubcategory(null);
+    setItems([]);
+    setSelectedItem(null);
+    
     try {
-      const url = path ? `${GITHUB_API}/${path}` : GITHUB_API;
+      const url = `${GITHUB_API}/sheet_definitions/${categoryId}`;
       const res = await fetch(url);
-      if (!res.ok) throw new Error('Erreur de chargement');
+      if (!res.ok) throw new Error(`Erreur ${res.status}`);
       const data = await res.json();
       
-      // Trier : dossiers d'abord, puis fichiers
-      const sorted = data.sort((a: FileNode, b: FileNode) => {
-        if (a.type === b.type) return a.name.localeCompare(b.name);
-        return a.type === 'dir' ? -1 : 1;
-      });
+      // Filtrer pour avoir les dossiers (sous-catégories) et fichiers JSON
+      const folders = data.filter((f: any) => f.type === 'dir').map((f: any) => f.name);
+      const jsonFiles = data.filter((f: any) => f.name.endsWith('.json') && !f.name.startsWith('meta_'));
       
-      setContents(sorted);
-      setCurrentPath(path);
-    } catch (err) {
-      setError('Erreur de chargement. Réessayez.');
-      console.error(err);
+      setSubcategories(folders);
+      
+      // Si pas de sous-dossiers, charger directement les items JSON
+      if (folders.length === 0 && jsonFiles.length > 0) {
+        await loadItemsFromJsonList(categoryId, '', jsonFiles);
+      }
+    } catch (err: any) {
+      setError(err.message);
     }
     setLoading(false);
   };
 
-  // Charger le dossier racine au démarrage
-  useEffect(() => {
-    loadDirectory('');
-  }, []);
-
-  // Navigation : remonter d'un niveau
-  const goBack = () => {
-    const parts = currentPath.split('/');
-    parts.pop();
-    loadDirectory(parts.join('/'));
-  };
-
-  // Générer le chemin local pour un sprite
-  const getLocalPath = (githubPath: string) => {
-    return `/sprites/lpc/${githubPath.replace('spritesheets/', '')}`;
-  };
-
-  // Télécharger un sprite sur le serveur
-  const downloadSprite = async (node: FileNode) => {
-    setDownloading(true);
+  // Charger les items d'une sous-catégorie
+  const loadSubcategory = async (subcategory: string) => {
+    setLoading(true);
+    setError(null);
+    setSelectedSubcategory(subcategory);
+    setItems([]);
+    setSelectedItem(null);
+    
     try {
-      const localPath = getLocalPath(node.path);
-      // Appeler l'API pour télécharger
-      const res = await fetch('/api/admin/sprites/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: `${GITHUB_RAW}/${node.path.replace('spritesheets/', '')}`,
-          localPath,
-        }),
-      });
+      const url = `${GITHUB_API}/sheet_definitions/${selectedCategory}/${subcategory}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Erreur ${res.status}`);
+      const data = await res.json();
       
-      if (res.ok) {
-        onSelectSprite({
-          name: node.name.replace('.png', ''),
-          url: `${GITHUB_RAW}/${node.path.replace('spritesheets/', '')}`,
-          localPath,
-        });
-      }
-    } catch (err) {
-      console.error('Erreur téléchargement:', err);
+      const jsonFiles = data.filter((f: any) => f.name.endsWith('.json') && !f.name.startsWith('meta_'));
+      await loadItemsFromJsonList(selectedCategory!, subcategory, jsonFiles);
+    } catch (err: any) {
+      setError(err.message);
     }
-    setDownloading(false);
+    setLoading(false);
   };
 
-  // Filtrer les contenus
-  const filteredContents = searchQuery
-    ? contents.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : contents;
+  // Charger et parser les fichiers JSON des items
+  const loadItemsFromJsonList = async (category: string, subcategory: string, jsonFiles: any[]) => {
+    const loadedItems: ItemDefinition[] = [];
+    
+    // Limiter à 30 items pour éviter trop de requêtes
+    const filesToLoad = jsonFiles.slice(0, 30);
+    
+    for (const file of filesToLoad) {
+      try {
+        const jsonUrl = `${GITHUB_RAW}/sheet_definitions/${category}${subcategory ? '/' + subcategory : ''}/${file.name}`;
+        const res = await fetch(jsonUrl);
+        if (!res.ok) continue;
+        const def = await res.json();
+        
+        // Trouver le chemin du sprite (layer_1 généralement)
+        let spritePath = '';
+        if (def.layer_1?.male) {
+          spritePath = def.layer_1.male;
+        } else if (def.layer_1) {
+          spritePath = Object.values(def.layer_1).find((v: any) => typeof v === 'string' && v.includes('/')) as string || '';
+        }
+        
+        // Construire l'URL de preview (animation walk ou idle)
+        const variant = def.variants?.[0] || file.name.replace('.json', '').split('_').pop();
+        const previewUrl = spritePath 
+          ? `${GITHUB_RAW}/spritesheets/${spritePath}walk/${variant}.png`
+          : '';
+        
+        loadedItems.push({
+          name: def.name || file.name.replace('.json', ''),
+          fileName: file.name,
+          category,
+          subcategory,
+          spritePath,
+          previewUrl,
+          variants: def.variants,
+        });
+      } catch (e) {
+        console.error('Error loading', file.name, e);
+      }
+    }
+    
+    setItems(loadedItems);
+    setAllItems(prev => [...prev.filter(i => i.category !== category || i.subcategory !== subcategory), ...loadedItems]);
+  };
 
-  // Breadcrumb
-  const pathParts = currentPath ? currentPath.split('/') : [];
+  // Retour
+  const goBack = () => {
+    if (selectedSubcategory) {
+      setSelectedSubcategory(null);
+      setItems([]);
+      setSelectedItem(null);
+    } else if (selectedCategory) {
+      setSelectedCategory(null);
+      setSubcategories([]);
+      setItems([]);
+      setSelectedItem(null);
+    }
+  };
+
+  // Filtrer
+  const filteredItems = searchQuery && !selectedCategory
+    ? allItems.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : items;
+
+  // Recherche globale
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (query && !selectedCategory) {
+      // Recherche dans tous les items chargés
+    }
+  };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <FolderOpen className="w-5 h-5 text-yellow-500" />
-          <h2 className="text-lg font-bold text-white">Explorateur LPC</h2>
-          <Badge className="bg-blue-600">{contents.filter(c => c.type === 'file').length} sprites</Badge>
+        <div className="flex items-center gap-3">
+          <FolderOpen className="w-6 h-6 text-yellow-500" />
+          <h2 className="text-xl font-bold text-white">Explorateur LPC</h2>
+          {selectedCategory && (
+            <Badge className="bg-gray-600 text-sm">
+              {CATEGORIES.find(c => c.id === selectedCategory)?.name}
+              {selectedSubcategory && ` / ${selectedSubcategory}`}
+            </Badge>
+          )}
         </div>
         
         <div className="relative">
@@ -123,32 +194,14 @@ export function SpriteExplorer({ onSelectSprite }: SpriteExplorerProps) {
           <Input
             placeholder="Rechercher..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearch(e.target.value)}
             className="pl-10 w-64 bg-gray-700 border-gray-600"
           />
         </div>
       </div>
 
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1 text-sm text-gray-400 flex-wrap">
-        <button onClick={() => loadDirectory('')} className="hover:text-white">
-          spritesheets
-        </button>
-        {pathParts.map((part, i) => (
-          <span key={i} className="flex items-center gap-1">
-            <ChevronRight className="w-4 h-4" />
-            <button
-              onClick={() => loadDirectory(pathParts.slice(0, i + 1).join('/'))}
-              className="hover:text-white"
-            >
-              {part}
-            </button>
-          </span>
-        ))}
-      </div>
-
-      {/* Navigation */}
-      {currentPath && (
+      {/* Back button */}
+      {(selectedCategory || selectedSubcategory) && (
         <Button variant="ghost" size="sm" onClick={goBack}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Retour
@@ -157,108 +210,154 @@ export function SpriteExplorer({ onSelectSprite }: SpriteExplorerProps) {
 
       {/* Contenu */}
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
+        <div className="flex flex-col items-center justify-center py-16">
+          <Loader2 className="w-10 h-10 animate-spin text-yellow-500 mb-4" />
+          <p className="text-gray-400">Chargement...</p>
         </div>
       ) : error ? (
-        <div className="text-center py-12 text-red-400">{error}</div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-          {filteredContents.map((node) => (
-            <div
-              key={node.path}
-              onClick={() => {
-                if (node.type === 'dir') {
-                  loadDirectory(node.path);
-                } else {
-                  setSelectedSprite(node);
-                }
-              }}
-              className={`
-                p-3 rounded-lg border cursor-pointer transition-all
-                ${node.type === 'dir' 
-                  ? 'bg-gray-800 border-gray-700 hover:border-yellow-500' 
-                  : 'bg-gray-900 border-gray-700 hover:border-blue-500'}
-                ${selectedSprite?.path === node.path ? 'border-blue-500 ring-2 ring-blue-500/50' : ''}
-              `}
+        <div className="text-center py-16">
+          <p className="text-red-400 mb-4">{error}</p>
+          <Button onClick={() => selectedCategory && loadCategory(selectedCategory)}>Réessayer</Button>
+        </div>
+      ) : !selectedCategory ? (
+        /* Grille des catégories principales */
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => loadCategory(cat.id)}
+              className="p-6 rounded-xl bg-gray-800 border border-gray-700 hover:border-yellow-500 hover:bg-gray-700 transition-all group"
             >
-              {node.type === 'dir' ? (
-                <div className="text-center">
-                  <FolderOpen className="w-10 h-10 mx-auto mb-2 text-yellow-500" />
-                  <p className="text-xs text-white truncate">{node.name}</p>
-                </div>
-              ) : (
-                <div className="text-center">
-                  <div className="w-16 h-16 mx-auto mb-2 bg-gray-800 rounded flex items-center justify-center overflow-hidden">
-                    <img
-                      src={`${GITHUB_RAW}/${node.path.replace('spritesheets/', '')}`}
-                      alt={node.name}
-                      className="max-w-full max-h-full object-contain"
-                      style={{ 
-                        imageRendering: 'pixelated',
-                        transform: 'scale(2)',
-                        transformOrigin: 'top left',
-                        clipPath: 'inset(0 0 calc(100% - 64px) calc(100% - 64px))'
-                      }}
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-300 truncate" title={node.name}>
-                    {node.name.replace('.png', '')}
-                  </p>
-                </div>
-              )}
-            </div>
+              <div className={`w-14 h-14 rounded-xl ${cat.color} flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform`}>
+                <cat.icon className="w-7 h-7 text-white" />
+              </div>
+              <p className="text-white font-semibold text-lg">{cat.name}</p>
+              <p className="text-gray-400 text-sm mt-1">{cat.id}</p>
+            </button>
+          ))}
+        </div>
+      ) : subcategories.length > 0 && !selectedSubcategory ? (
+        /* Grille des sous-catégories */
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {subcategories.map((sub) => (
+            <button
+              key={sub}
+              onClick={() => loadSubcategory(sub)}
+              className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-blue-500 hover:bg-gray-700 transition-all"
+            >
+              <FolderOpen className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
+              <p className="text-white font-medium text-sm truncate">{sub}</p>
+            </button>
+          ))}
+        </div>
+      ) : (
+        /* Grille des items */
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {filteredItems.map((item, idx) => (
+            <button
+              key={idx}
+              onClick={() => setSelectedItem(item)}
+              className={`p-4 rounded-lg border transition-all text-left ${
+                selectedItem?.fileName === item.fileName
+                  ? 'bg-yellow-500/20 border-yellow-500'
+                  : 'bg-gray-800 border-gray-700 hover:border-blue-500 hover:bg-gray-700'
+              }`}
+            >
+              <div className="w-16 h-16 mx-auto mb-3 bg-gray-900 rounded-lg flex items-center justify-center overflow-hidden">
+                {item.previewUrl ? (
+                  <img
+                    src={item.previewUrl}
+                    alt={item.name}
+                    className="w-16 h-16 object-none object-[0_-128px]"
+                    style={{ imageRendering: 'pixelated' }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <Swords className="w-8 h-8 text-gray-600" />
+                )}
+              </div>
+              <p className="text-white font-medium text-sm truncate text-center" title={item.name}>
+                {item.name}
+              </p>
+            </button>
           ))}
         </div>
       )}
 
-      {/* Panel sprite sélectionné */}
-      {selectedSprite && (
-        <Card className="bg-gray-800 border-gray-700 mt-6">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-6">
+      {/* Empty state */}
+      {!loading && !error && selectedCategory && items.length === 0 && subcategories.length === 0 && (
+        <div className="text-center py-16 text-gray-400">
+          <p>Aucun item trouvé dans cette catégorie</p>
+        </div>
+      )}
+
+      {/* Panel item sélectionné */}
+      {selectedItem && (
+        <Card className="bg-gray-800 border-yellow-500/50 mt-6">
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row items-start gap-6">
               {/* Preview */}
-              <div className="bg-gray-900 rounded-lg p-4 flex-shrink-0">
-                <div className="w-32 h-32 overflow-hidden">
+              <div className="bg-gray-900 rounded-xl p-6 flex-shrink-0">
+                {selectedItem.previewUrl ? (
                   <img
-                    src={`${GITHUB_RAW}/${selectedSprite.path.replace('spritesheets/', '')}`}
-                    alt={selectedSprite.name}
-                    className="w-full h-full object-contain"
-                    style={{ 
-                      imageRendering: 'pixelated',
-                      objectPosition: '0 -128px'
-                    }}
+                    src={selectedItem.previewUrl}
+                    alt={selectedItem.name}
+                    className="w-32 h-32 object-none object-[0_-128px]"
+                    style={{ imageRendering: 'pixelated' }}
                   />
-                </div>
+                ) : (
+                  <div className="w-32 h-32 flex items-center justify-center">
+                    <Swords className="w-16 h-16 text-gray-600" />
+                  </div>
+                )}
               </div>
 
               {/* Infos */}
-              <div className="flex-1 space-y-3">
-                <h3 className="text-lg font-bold text-white">{selectedSprite.name.replace('.png', '')}</h3>
-                <p className="text-sm text-gray-400">
-                  Chemin : <code className="text-xs bg-gray-900 px-2 py-1 rounded">{selectedSprite.path}</code>
-                </p>
+              <div className="flex-1 space-y-4">
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-1">{selectedItem.name}</h3>
+                  <p className="text-sm text-gray-400">
+                    {selectedItem.category}{selectedItem.subcategory && ` / ${selectedItem.subcategory}`}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2 font-mono">
+                    {selectedItem.spritePath}
+                  </p>
+                  {selectedItem.variants && selectedItem.variants.length > 0 && (
+                    <div className="mt-3 flex gap-2 flex-wrap">
+                      {selectedItem.variants.map(v => (
+                        <Badge key={v} className="bg-gray-700">{v}</Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-3 flex-wrap">
                   <Button
                     onClick={() => {
+                      const variant = selectedItem.variants?.[0] || 'default';
+                      const spriteUrl = selectedItem.previewUrl || `${GITHUB_RAW}/spritesheets/${selectedItem.spritePath}walk/${variant}.png`;
                       onSelectSprite({
-                        name: selectedSprite.name.replace('.png', ''),
-                        url: `${GITHUB_RAW}/${selectedSprite.path.replace('spritesheets/', '')}`,
-                        localPath: getLocalPath(selectedSprite.path),
+                        name: selectedItem.name,
+                        url: spriteUrl,
+                        localPath: `/sprites/lpc/${selectedItem.spritePath}`,
                       });
                     }}
+                    className="bg-yellow-600 hover:bg-yellow-500"
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    Utiliser ce sprite
+                    Créer un item
                   </Button>
                   
-                  <Button variant="secondary" onClick={() => downloadSprite(selectedSprite)} disabled={downloading}>
-                    {downloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                    Télécharger sur serveur
+                  <Button 
+                    variant="secondary"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedItem.previewUrl || '');
+                      alert('URL copiée !');
+                    }}
+                  >
+                    Copier l'URL
                   </Button>
                 </div>
               </div>
@@ -267,9 +366,9 @@ export function SpriteExplorer({ onSelectSprite }: SpriteExplorerProps) {
         </Card>
       )}
 
-      {/* Stats */}
-      <p className="text-xs text-gray-500 text-center">
-        24 221 sprites disponibles depuis le repo LPC • Navigation en temps réel
+      {/* Info */}
+      <p className="text-xs text-gray-500 text-center mt-8">
+        Source : Universal LPC Spritesheet Character Generator • Organisation identique au générateur web
       </p>
     </div>
   );

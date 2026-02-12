@@ -49,3 +49,7 @@ celery_app.conf.beat_schedule = {
         "schedule": 86400.0,  # 24 hours
     },
 }
+
+# Import all models to ensure SQLAlchemy mappers are configured
+# This must happen before any task uses the database
+import app.models  # noqa: F401, E402
