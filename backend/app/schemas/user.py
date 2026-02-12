@@ -85,15 +85,42 @@ class UserUpdate(BaseModel):
         description="New email address",
         examples=["newemail@example.com"]
     )
+    display_name: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Display name shown on profile",
+        examples=["Dragon Slayer"]
+    )
+    bio: str | None = Field(
+        default=None,
+        max_length=280,
+        description="Short bio/description",
+        examples=["Slaying dragons and completing habits since 2026"]
+    )
     avatar_url: str | None = Field(
         default=None,
         max_length=500,
         description="URL to user's avatar image",
         examples=["https://example.com/avatars/hero.png"]
     )
-    notification_enabled: bool | None = Field(
+    timezone: str | None = Field(
+        default=None,
+        max_length=50,
+        description="User's timezone",
+        examples=["Europe/Paris"]
+    )
+    is_public: bool | None = Field(
+        default=None,
+        description="Whether profile is publicly visible"
+    )
+    notifications_enabled: bool | None = Field(
         default=None,
         description="Enable/disable notifications"
+    )
+    theme: str | None = Field(
+        default=None,
+        description="UI theme preference",
+        examples=["dark", "light"]
     )
 
 
@@ -117,6 +144,14 @@ class UserResponse(BaseModel):
         description="User's display name",
         examples=["DragonSlayer42"]
     )
+    display_name: str | None = Field(
+        default=None,
+        description="Display name shown on profile"
+    )
+    bio: str | None = Field(
+        default=None,
+        description="Short bio/description"
+    )
     avatar_url: str | None = Field(
         default=None,
         description="URL to user's avatar",
@@ -139,6 +174,25 @@ class UserResponse(BaseModel):
         ge=0,
         description="Current coin balance",
         examples=[1250]
+    )
+    current_streak: int = Field(
+        default=0,
+        ge=0,
+        description="Current habit streak"
+    )
+    best_streak: int = Field(
+        default=0,
+        ge=0,
+        description="Best streak ever achieved"
+    )
+    friend_code: str | None = Field(
+        default=None,
+        description="Unique friend code for adding friends",
+        examples=["ABC123"]
+    )
+    is_public: bool = Field(
+        default=False,
+        description="Whether profile is publicly visible"
     )
     created_at: datetime = Field(
         ...,
