@@ -376,7 +376,7 @@ class TestShopInventoryFlow:
         # Step 1: Find a cheap item we can afford
         shop = client.get("/api/shop/items?max_price=100", headers=headers)
         items = shop.json()["items"]
-        affordable = [i for i in items if i["can_afford"] and not i["is_owned"]]
+        affordable = [i for i in items if i["can_afford"] and not i["is_owned"] and i["price"] > 0]
         
         if not affordable:
             pytest.skip("No affordable items to purchase")
