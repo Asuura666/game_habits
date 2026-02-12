@@ -1,4 +1,7 @@
-# 🎮 HabitQuest
+# HabitQuest 🎮
+
+![CI](https://github.com/Asuura666/game_habits/actions/workflows/ci.yml/badge.svg)
+
 
 <div align="center">
 
