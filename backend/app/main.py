@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
 # Configure structured logging
 configure_logging()
 app = FastAPI(
+    redirect_slashes=False,
     title=settings.app_name,
     version="1.0.0",
     description="Habit Tracker Gamifié - API Backend",
