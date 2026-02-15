@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Plus, Minus, Flame, Coins, Sparkles } from 'lucide-react';
+import { Plus, Minus, Flame, Coins, Sparkles, Loader2 } from 'lucide-react';
 import { cn, getDifficultyColor } from '@/lib/utils';
 import { Card } from '@/components/ui';
 import type { Habit } from '@/types';
@@ -9,17 +9,18 @@ import type { Habit } from '@/types';
 interface HabitCardProps {
   habit: Habit;
   onComplete?: (habitId: string, positive: boolean) => void;
+  isLoading?: boolean;
 }
 
-export function HabitCard({ habit, onComplete }: HabitCardProps) {
+export function HabitCard({ habit, onComplete, isLoading }: HabitCardProps) {
   const handlePositive = () => {
-    if (onComplete && !habit.completedToday) {
+    if (onComplete && !habit.completedToday && !isLoading) {
       onComplete(habit.id, true);
     }
   };
 
   const handleNegative = () => {
-    if (onComplete) {
+    if (onComplete && !isLoading) {
       onComplete(habit.id, false);
     }
   };
@@ -39,15 +40,19 @@ export function HabitCard({ habit, onComplete }: HabitCardProps) {
         {habit.positive && (
           <button
             onClick={handlePositive}
-            disabled={habit.completedToday}
+            disabled={habit.completedToday || isLoading}
             className={cn(
-              'w-12 h-12 rounded-lg flex items-center justify-center transition-all',
+              'w-12 h-12 rounded-lg flex items-center justify-center transition-all min-w-[48px] min-h-[48px]',
               habit.completedToday
                 ? 'bg-green-500 text-white cursor-not-allowed'
-                : 'bg-green-100 text-green-600 hover:bg-green-500 hover:text-white dark:bg-green-900/50 dark:text-green-400 dark:hover:bg-green-500 dark:hover:text-white'
+                : isLoading
+                ? 'bg-gray-300 dark:bg-gray-600 cursor-wait'
+                : 'bg-green-100 text-green-600 hover:bg-green-500 hover:text-white dark:bg-green-900/50 dark:text-green-400 dark:hover:bg-green-500 dark:hover:text-white active:scale-95'
             )}
           >
-            {habit.completedToday ? (
+            {isLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : habit.completedToday ? (
               <Sparkles className="w-6 h-6" />
             ) : (
               <Plus className="w-6 h-6" />
@@ -65,7 +70,7 @@ export function HabitCard({ habit, onComplete }: HabitCardProps) {
               {habit.title}
             </h3>
             <span className={cn(
-              'w-2 h-2 rounded-full',
+              'w-2 h-2 rounded-full shrink-0',
               getDifficultyColor(habit.difficulty)
             )} />
           </div>
@@ -100,9 +105,19 @@ export function HabitCard({ habit, onComplete }: HabitCardProps) {
         {habit.negative && (
           <button
             onClick={handleNegative}
-            className="w-12 h-12 rounded-lg bg-red-100 text-red-600 hover:bg-red-500 hover:text-white dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-500 dark:hover:text-white flex items-center justify-center transition-all"
+            disabled={isLoading}
+            className={cn(
+              'w-12 h-12 rounded-lg flex items-center justify-center transition-all min-w-[48px] min-h-[48px]',
+              isLoading
+                ? 'bg-gray-300 dark:bg-gray-600 cursor-wait'
+                : 'bg-red-100 text-red-600 hover:bg-red-500 hover:text-white dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-500 dark:hover:text-white active:scale-95'
+            )}
           >
-            <Minus className="w-6 h-6" />
+            {isLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Minus className="w-6 h-6" />
+            )}
           </button>
         )}
       </Card>

@@ -14,6 +14,7 @@ from app.deps import CurrentUser, CurrentUserWithCharacter, DBSession
 from app.models.character import Character
 from app.models.inventory import UserInventory
 from app.models.item import Item
+from app.services.level_service import xp_for_level, xp_for_next_level
 from app.schemas.character import (
     CharacterCreate,
     CharacterResponse,
@@ -35,6 +36,12 @@ router = APIRouter(prefix="/characters", tags=["Characters"])
 
 def character_to_response(character: Character, user) -> CharacterResponse:
     """Convert Character model to CharacterResponse."""
+    # Calculate XP properly using level_service
+    level_xp_required = xp_for_level(user.level)
+    next_level_xp = xp_for_level(user.level + 1)
+    current_xp_in_level = user.total_xp - level_xp_required
+    xp_needed_for_next = next_level_xp - level_xp_required
+    
     return CharacterResponse(
         id=character.id,
         user_id=character.user_id,
@@ -43,8 +50,8 @@ def character_to_response(character: Character, user) -> CharacterResponse:
         title=None,  # TODO: Add title field to model
         avatar_id="default",
         level=user.level,
-        current_xp=user.total_xp % 1000,  # Simplified XP calculation
-        xp_to_next_level=1000,
+        current_xp=max(0, current_xp_in_level),
+        xp_to_next_level=xp_needed_for_next,
         total_xp=user.total_xp,
         hp=100,  # TODO: Track current HP
         max_hp=100 + (character.endurance * 5),
