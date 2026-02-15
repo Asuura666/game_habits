@@ -1,7 +1,7 @@
 """
 Celery tasks for LLM-powered task evaluation.
+Now with rate limiting!
 """
-# import asyncio  # Removed - using celery_utils
 from uuid import UUID
 
 import structlog
@@ -13,14 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.tasks.celery_utils import get_celery_db_session, run_async
 from app.models.task import Task
 from app.models.user import User
-from app.models.completion import Completion
-from app.models.stats import DailyStats
 from app.services.llm_service import get_llm_service
+from app.services.llm_rate_limiter import get_rate_limiter, RateLimitExceeded
 from app.tasks.notification_tasks import send_notification
 
 logger = structlog.get_logger()
-
-
 
 
 async def _get_user_context(session: AsyncSession, user: User) -> dict:
@@ -83,17 +80,14 @@ async def _get_user_context(session: AsyncSession, user: User) -> dict:
             stats["average_xp"] = 50
         
         if stats["difficulties"]:
-            # Most common difficulty
             from collections import Counter
             stats["average_difficulty"] = Counter(stats["difficulties"]).most_common(1)[0][0]
         else:
             stats["average_difficulty"] = "medium"
         
-        # Clean up internal tracking
         del stats["difficulties"]
         del stats["xp_values"]
     
-    # Build context
     return {
         "level": user.level,
         "total_xp": user.total_xp,
@@ -101,7 +95,7 @@ async def _get_user_context(session: AsyncSession, user: User) -> dict:
         "best_streak": user.best_streak,
         "tasks_completed_total": len(completed_tasks),
         "tasks_completed_this_week": len(weekly_tasks),
-        "average_completion_rate": 0.75,  # TODO: Calculate from DailyStats
+        "average_completion_rate": 0.75,
         "preferred_difficulty": "medium",
         "completed_tasks": [
             {
@@ -120,7 +114,7 @@ async def _get_user_context(session: AsyncSession, user: User) -> dict:
 
 async def _evaluate_task_async(task_id: str, user_id: str) -> dict:
     """
-    Async implementation of task evaluation.
+    Async implementation of task evaluation with rate limiting.
     
     Args:
         task_id: UUID of the task to evaluate
@@ -131,6 +125,14 @@ async def _evaluate_task_async(task_id: str, user_id: str) -> dict:
     """
     log = logger.bind(task_id=task_id, user_id=user_id)
     log.info("starting_task_evaluation")
+    
+    # === RATE LIMIT CHECK ===
+    rate_limiter = get_rate_limiter()
+    allowed, reason = await rate_limiter.check_rate_limit(user_id)
+    
+    if not allowed:
+        log.warning("rate_limit_exceeded", reason=reason)
+        raise RateLimitExceeded(reason)
     
     async with get_celery_db_session() as session:
         # Fetch task
@@ -164,6 +166,9 @@ async def _evaluate_task_async(task_id: str, user_id: str) -> dict:
             user_context=user_context,
         )
         
+        # === RECORD SUCCESSFUL REQUEST ===
+        await rate_limiter.record_request(user_id)
+        
         # Update task with evaluation
         task.ai_difficulty = evaluation.difficulty.value
         task.ai_xp_reward = evaluation.xp_reward
@@ -191,6 +196,40 @@ async def _evaluate_task_async(task_id: str, user_id: str) -> dict:
             "suggested_subtasks": evaluation.suggested_subtasks,
             "estimated_time_minutes": evaluation.estimated_time_minutes,
         }
+
+
+def _apply_default_evaluation(task_id: str) -> dict:
+    """Apply default evaluation when rate limited or LLM fails."""
+    
+    async def _apply():
+        async with get_celery_db_session() as session:
+            task_query = select(Task).where(Task.id == UUID(task_id))
+            result = await session.execute(task_query)
+            task = result.scalar_one_or_none()
+            
+            if not task:
+                return {"error": "Task not found"}
+            
+            # Apply default values
+            task.ai_difficulty = "medium"
+            task.ai_xp_reward = 50
+            task.ai_coins_reward = 25
+            task.ai_reasoning = "Default evaluation applied (rate limit or evaluation unavailable)."
+            task.ai_suggested_subtasks = []
+            task.calculate_final_rewards()
+            
+            await session.commit()
+            
+            return {
+                "task_id": task_id,
+                "difficulty": "medium",
+                "xp_reward": 50,
+                "coins_reward": 25,
+                "reasoning": "Default evaluation applied.",
+                "default_applied": True,
+            }
+    
+    return run_async(_apply())
 
 
 @shared_task(
@@ -224,7 +263,6 @@ def evaluate_task_async(self, task_id: str, user_id: str):
         result = run_async(_evaluate_task_async(task_id, user_id))
         
         if "error" not in result:
-            # Send notification to user
             send_notification.delay(
                 user_id=user_id,
                 type="task_evaluated",
@@ -241,18 +279,40 @@ def evaluate_task_async(self, task_id: str, user_id: str):
         
         log.info("evaluate_task_completed", result=result)
         return result
+    
+    except RateLimitExceeded as e:
+        log.warning("rate_limit_exceeded_applying_default", message=e.message)
+        
+        # Apply default evaluation instead of failing
+        result = _apply_default_evaluation(task_id)
+        
+        # Notify user
+        send_notification.delay(
+            user_id=user_id,
+            type="task_evaluated",
+            title="Task Ready! 📋",
+            message=f"Default difficulty applied due to rate limit. "
+                    f"Complete it to earn {result.get('xp_reward', 50)} XP!",
+            data={
+                "task_id": task_id,
+                "rate_limited": True,
+            },
+        )
+        
+        return result
         
     except MaxRetriesExceededError:
         log.error("evaluate_task_max_retries_exceeded")
-        # Notify user of failure
+        result = _apply_default_evaluation(task_id)
+        
         send_notification.delay(
             user_id=user_id,
             type="task_evaluation_failed",
-            title="Evaluation Failed",
-            message="We couldn't evaluate your task automatically. Default values have been applied.",
+            title="Evaluation Unavailable",
+            message="Default values have been applied to your task.",
             data={"task_id": task_id},
         )
-        raise
+        return result
         
     except Exception as e:
         log.error("evaluate_task_failed", error=str(e), exc_info=True)
@@ -263,6 +323,7 @@ def evaluate_task_async(self, task_id: str, user_id: str):
 def batch_evaluate_tasks(self, task_ids: list[str], user_id: str):
     """
     Evaluate multiple tasks in batch.
+    Note: Each task consumes rate limit quota individually.
     
     Args:
         task_ids: List of task UUID strings
@@ -284,7 +345,6 @@ def batch_evaluate_tasks(self, task_ids: list[str], user_id: str):
     return results
 
 
-# Aliases for backward compatibility with routers
 @shared_task(
     bind=True,
     max_retries=3,
@@ -295,7 +355,7 @@ def batch_evaluate_tasks(self, task_ids: list[str], user_id: str):
 def evaluate_task_difficulty(self, task_id: str):
     """
     Evaluate task difficulty via LLM.
-    Alias for evaluate_task_async that fetches user_id from task.
+    Fetches user_id from task.
     
     Args:
         task_id: UUID string of the task to evaluate
@@ -317,14 +377,18 @@ def evaluate_task_difficulty(self, task_id: str):
         log.error("task_not_found_for_evaluation")
         return {"error": "Task not found"}
     
-    return run_async(_evaluate_task_async(task_id, user_id))
+    try:
+        return run_async(_evaluate_task_async(task_id, user_id))
+    except RateLimitExceeded:
+        log.warning("rate_limited_applying_default")
+        return _apply_default_evaluation(task_id)
 
 
 @shared_task(bind=True, max_retries=2)
 def reevaluate_task(self, task_id: str):
     """
     Re-evaluate an existing task.
-    Alias for evaluate_task_difficulty.
+    Note: Consumes rate limit quota.
     
     Args:
         task_id: UUID string of the task to re-evaluate
