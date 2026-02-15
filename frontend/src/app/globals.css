@@ -96,3 +96,42 @@ body {
 .animate-shine {
   animation: shine 3s ease-in-out infinite;
 }
+
+/* US-1.6: Mobile Responsive Enhancements */
+@layer base {
+  /* Prevent horizontal scroll on all containers */
+  main, .container {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  
+  /* Touch-friendly tap highlight */
+  * {
+    -webkit-tap-highlight-color: rgba(99, 102, 241, 0.2);
+  }
+  
+  /* Prevent zoom on input focus (iOS) */
+  input, select, textarea {
+    font-size: 16px;
+  }
+  
+  /* Safe area insets for notched devices */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+}
+
+/* Touch-friendly interactive elements */
+@layer utilities {
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  .touch-target-lg {
+    @apply min-h-[48px] min-w-[48px];
+  }
+}

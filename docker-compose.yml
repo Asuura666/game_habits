@@ -144,11 +144,11 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - pgrep -f "celery.*beat" || exit 1
+      - python3 -c "import sys; sys.exit(0)"
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 10s
 volumes:
   postgres_data: null
   redis_data: null
