@@ -68,6 +68,9 @@ def update_streak(db: Session, user: "User", completion_date: date) -> dict:
         user.current_streak = 1
         user.last_activity_date = completion_date
         result["new_streak"] = 1
+        # Update best_streak if needed
+        if user.current_streak > user.best_streak:
+            user.best_streak = user.current_streak
         return result
     
     # Même jour - pas de changement
@@ -81,6 +84,9 @@ def update_streak(db: Session, user: "User", completion_date: date) -> dict:
         user.current_streak += 1
         user.last_activity_date = completion_date
         result["new_streak"] = user.current_streak
+        # Update best_streak if needed
+        if user.current_streak > user.best_streak:
+            user.best_streak = user.current_streak
         
     elif days_diff == 2 and check_streak_freeze(user):
         # Un jour manqué mais streak freeze disponible
@@ -89,6 +95,9 @@ def update_streak(db: Session, user: "User", completion_date: date) -> dict:
         user.last_activity_date = completion_date
         result["new_streak"] = user.current_streak
         result["freeze_used"] = True
+        # Update best_streak if needed
+        if user.current_streak > user.best_streak:
+            user.best_streak = user.current_streak
         
     elif days_diff > 1:
         # Streak perdu
