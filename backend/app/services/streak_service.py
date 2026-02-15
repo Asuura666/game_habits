@@ -13,7 +13,8 @@ Mécaniques:
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from app.models.badge import Badge, UserBadge
@@ -36,17 +37,12 @@ STREAK_BADGE_THRESHOLDS = [
 ]
 
 
-def update_streak(db: Session, user: "User", completion_date: date) -> dict:
+async def update_streak(db: AsyncSession, user: "User", completion_date: date) -> dict:
     """
     Met à jour le streak de l'utilisateur après une activité.
     
-    Logique:
-    1. Si c'est le même jour que la dernière activité: pas de changement
-    2. Si c'est le jour suivant: +1 streak
-    3. Si plus d'un jour est passé: vérifie streak freeze, sinon reset
-    
     Args:
-        db: Session de base de données
+        db: Session async de base de données
         user: L'utilisateur
         completion_date: Date de l'activité
         
@@ -68,7 +64,6 @@ def update_streak(db: Session, user: "User", completion_date: date) -> dict:
         user.current_streak = 1
         user.last_activity_date = completion_date
         result["new_streak"] = 1
-        # Update best_streak if needed
         if user.current_streak > user.best_streak:
             user.best_streak = user.current_streak
         return result
@@ -84,85 +79,51 @@ def update_streak(db: Session, user: "User", completion_date: date) -> dict:
         user.current_streak += 1
         user.last_activity_date = completion_date
         result["new_streak"] = user.current_streak
-        # Update best_streak if needed
         if user.current_streak > user.best_streak:
             user.best_streak = user.current_streak
         
     elif days_diff == 2 and check_streak_freeze(user):
         # Un jour manqué mais streak freeze disponible
         user.streak_freeze_available -= 1
-        user.current_streak += 1  # On compte quand même aujourd'hui
+        user.current_streak += 1
         user.last_activity_date = completion_date
         result["new_streak"] = user.current_streak
         result["freeze_used"] = True
-        # Update best_streak if needed
         if user.current_streak > user.best_streak:
             user.best_streak = user.current_streak
         
     elif days_diff > 1:
         # Streak perdu
         result["streak_lost"] = True
-        
-        # Sauvegarder le meilleur streak
         if user.current_streak > user.best_streak:
             user.best_streak = user.current_streak
-        
-        # Reset
         user.current_streak = 1
         user.last_activity_date = completion_date
         result["new_streak"] = 1
     
-    # Vérifier les badges de streak
+    # Vérifier les badges de streak (async)
     if user.current_streak > result["old_streak"]:
-        badges = check_streak_badges(db, user)
+        badges = await check_streak_badges(db, user)
         result["badges_earned"] = badges
     
     return result
 
 
 def check_streak_freeze(user: "User") -> bool:
-    """
-    Vérifie si l'utilisateur a un streak freeze disponible.
-    
-    Args:
-        user: L'utilisateur
-        
-    Returns:
-        True si freeze disponible, False sinon
-    """
+    """Vérifie si l'utilisateur a un streak freeze disponible."""
     return user.streak_freeze_available > 0
 
 
-def use_streak_freeze(db: Session, user: "User") -> bool:
-    """
-    Utilise un streak freeze manuellement.
-    
-    Args:
-        db: Session de base de données
-        user: L'utilisateur
-        
-    Returns:
-        True si utilisé avec succès, False si aucun disponible
-    """
+async def use_streak_freeze(db: AsyncSession, user: "User") -> bool:
+    """Utilise un streak freeze manuellement."""
     if not check_streak_freeze(user):
         return False
-    
     user.streak_freeze_available -= 1
     return True
 
 
-def add_streak_freeze(db: Session, user: "User", amount: int = 1) -> int:
-    """
-    Ajoute des streak freezes à l'utilisateur.
-    
-    Args:
-        db: Session de base de données
-        user: L'utilisateur
-        amount: Nombre de freezes à ajouter
-        
-    Returns:
-        Nouveau total de freezes
-    """
+async def add_streak_freeze(db: AsyncSession, user: "User", amount: int = 1) -> int:
+    """Ajoute des streak freezes à l'utilisateur."""
     user.streak_freeze_available += amount
     return user.streak_freeze_available
 
@@ -172,81 +133,67 @@ def get_streak_multiplier(streak: int) -> float:
     Calcule le multiplicateur d'XP basé sur le streak.
     
     Formule: min(2.0, 1.0 + streak * 0.02)
-    
-    Exemples:
-    - Streak 0: x1.0
-    - Streak 5: x1.10
-    - Streak 10: x1.20
-    - Streak 25: x1.50
-    - Streak 50+: x2.0 (cap)
-    
-    Args:
-        streak: Nombre de jours de streak
-        
-    Returns:
-        Multiplicateur (entre 1.0 et 2.0)
     """
     if streak <= 0:
         return STREAK_MULTIPLIER_MIN
-    
     multiplier = STREAK_MULTIPLIER_MIN + (streak * STREAK_MULTIPLIER_INCREMENT)
     return min(STREAK_MULTIPLIER_MAX, multiplier)
 
 
-def check_streak_badges(db: Session, user: "User") -> list["Badge"]:
+async def check_streak_badges(db: AsyncSession, user: "User") -> list["Badge"]:
     """
-    Vérifie et débloque les badges de streak.
+    Vérifie et débloque les badges de streak (async version).
     
     Args:
-        db: Session de base de données
+        db: Session async de base de données
         user: L'utilisateur
         
     Returns:
         Liste des badges nouvellement débloqués
     """
-    from app.services.badge_service import unlock_badge
     from app.models.badge import Badge, UserBadge
     
     unlocked = []
     
     for threshold, badge_code in STREAK_BADGE_THRESHOLDS:
         if user.current_streak >= threshold:
-            # Vérifier si déjà obtenu
-            badge = db.query(Badge).filter(Badge.code == badge_code).first()
+            # Vérifier si déjà obtenu - async
+            badge_result = await db.execute(
+                select(Badge).where(Badge.code == badge_code)
+            )
+            badge = badge_result.scalar_one_or_none()
             
             if badge:
-                existing = db.query(UserBadge).filter(
-                    UserBadge.user_id == user.id,
-                    UserBadge.badge_id == badge.id
-                ).first()
+                existing_result = await db.execute(
+                    select(UserBadge).where(
+                        UserBadge.user_id == user.id,
+                        UserBadge.badge_id == badge.id
+                    )
+                )
+                existing = existing_result.scalar_one_or_none()
                 
                 if not existing:
-                    unlock_badge(db, user, badge)
+                    # Débloquer le badge
+                    user_badge = UserBadge(
+                        user_id=user.id,
+                        badge_id=badge.id,
+                    )
+                    db.add(user_badge)
                     unlocked.append(badge)
     
     return unlocked
 
 
 def get_streak_status(user: "User") -> dict:
-    """
-    Retourne le statut complet du streak de l'utilisateur.
-    
-    Args:
-        user: L'utilisateur
-        
-    Returns:
-        Dict avec toutes les infos de streak
-    """
+    """Retourne le statut complet du streak de l'utilisateur."""
     today = date.today()
     last_activity = user.last_activity_date
     
-    # Déterminer si le streak est en danger
     streak_at_risk = False
     if last_activity:
         days_since = (today - last_activity).days
         streak_at_risk = days_since >= 1 and user.current_streak > 0
     
-    # Prochain badge de streak
     next_badge = None
     for threshold, badge_code in STREAK_BADGE_THRESHOLDS:
         if user.current_streak < threshold:
@@ -269,37 +216,16 @@ def get_streak_status(user: "User") -> dict:
 
 
 def calculate_streak_recovery_cost(lost_streak: int) -> int:
-    """
-    Calcule le coût en coins pour récupérer un streak perdu.
-    
-    Formule: 50 + (lost_streak * 10), max 1000 coins
-    
-    Args:
-        lost_streak: Nombre de jours de streak perdus
-        
-    Returns:
-        Coût en coins
-    """
+    """Calcule le coût en coins pour récupérer un streak perdu."""
     base_cost = 50
     per_day_cost = 10
     max_cost = 1000
-    
     cost = base_cost + (lost_streak * per_day_cost)
     return min(cost, max_cost)
 
 
-def recover_streak(db: Session, user: "User", lost_streak: int) -> bool:
-    """
-    Tente de récupérer un streak perdu contre des coins.
-    
-    Args:
-        db: Session de base de données
-        user: L'utilisateur
-        lost_streak: Streak à restaurer
-        
-    Returns:
-        True si récupération réussie, False si pas assez de coins
-    """
+async def recover_streak(db: AsyncSession, user: "User", lost_streak: int) -> bool:
+    """Tente de récupérer un streak perdu contre des coins."""
     cost = calculate_streak_recovery_cost(lost_streak)
     
     if user.coins < cost:
@@ -309,7 +235,6 @@ def recover_streak(db: Session, user: "User", lost_streak: int) -> bool:
     user.current_streak = lost_streak
     user.last_activity_date = date.today() - timedelta(days=1)
     
-    # Log la transaction
     from app.models.transaction import CoinTransaction
     transaction = CoinTransaction(
         user_id=user.id,

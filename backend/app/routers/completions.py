@@ -139,7 +139,7 @@ async def create_completion(
     current_user.coins += coins_earned
     
     # Update streak using the new service
-    streak_result = update_streak(db, current_user, today)  # type: ignore
+    streak_result = await update_streak(db, current_user, today)
     new_streak = streak_result["new_streak"]
     
     # Update habit streak
