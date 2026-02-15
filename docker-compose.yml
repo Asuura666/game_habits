@@ -1,10 +1,4 @@
-# Habit Tracker Gamifié - Docker Compose
-# Version: 1.0.0
-
 services:
-  # ============================================
-  # DATABASE
-  # ============================================
   postgres:
     image: postgres:16-alpine
     container_name: habit-postgres
@@ -14,48 +8,45 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       POSTGRES_DB: ${DB_NAME:-habit_tracker}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+    - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-habit_user} -d ${DB_NAME:-habit_tracker}"]
+      test:
+      - CMD-SHELL
+      - pg_isready -U ${DB_USER:-habit_user} -d ${DB_NAME:-habit_tracker}
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - habit-network
+    - habit-network
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "10m"
-        max-file: "3"
-        tag: "{{.Name}}"
-
-  # ============================================
-  # CACHE & QUEUE
-  # ============================================
+        max-size: 10m
+        max-file: '3'
+        tag: '{{.Name}}'
   redis:
     image: redis:7-alpine
     container_name: habit-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
-      - redis_data:/data
+    - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+      - CMD
+      - redis-cli
+      - ping
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - habit-network
+    - habit-network
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "10m"
-        max-file: "3"
-        tag: "{{.Name}}"
-
-  # ============================================
-  # BACKEND (FastAPI)
-  # ============================================
+        max-size: 10m
+        max-file: '3'
+        tag: '{{.Name}}'
   backend:
     build:
       context: ./backend
@@ -63,43 +54,39 @@ services:
     container_name: habit-backend
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${DB_USER:-habit_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-habit_tracker}
-      - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
-      - APPLE_CLIENT_ID=${APPLE_CLIENT_ID:-}
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - CORS_ORIGINS=["https://habit.apps.ilanewep.cloud","http://localhost:3000"]
+    - DATABASE_URL=postgresql+asyncpg://${DB_USER:-habit_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-habit_tracker}
+    - REDIS_URL=redis://redis:6379/0
+    - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
+    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+    - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+    - APPLE_CLIENT_ID=${APPLE_CLIENT_ID:-}
+    - ENVIRONMENT=${ENVIRONMENT:-production}
+    - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    - CORS_ORIGINS=["https://habit.apps.ilanewep.cloud","http://localhost:3000"]
     ports:
-      - "127.0.0.1:8000:8000"
+    - 127.0.0.1:8000:8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.habit-api.rule=Host(`habit.apps.ilanewep.cloud`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.habit-api.entrypoints=websecure"
-      - "traefik.http.routers.habit-api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.habit-api.loadbalancer.server.port=8000"
+    - traefik.enable=true
+    - traefik.http.routers.habit-api.rule=Host(`habit.apps.ilanewep.cloud`) && PathPrefix(`/api`)
+    - traefik.http.routers.habit-api.entrypoints=websecure
+    - traefik.http.routers.habit-api.tls.certresolver=letsencrypt
+    - traefik.http.services.habit-api.loadbalancer.server.port=8000
     networks:
-      - habit-network
-      - traefik-public
+    - habit-network
+    - traefik-public
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "50m"
-        max-file: "5"
-        tag: "{{.Name}}"
-
-  # ============================================
-  # CELERY WORKER
-  # ============================================
+        max-size: 50m
+        max-file: '5'
+        tag: '{{.Name}}'
   celery-worker:
     build:
       context: ./backend
@@ -108,26 +95,30 @@ services:
     restart: unless-stopped
     command: celery -A app.celery_app worker --loglevel=info --concurrency=2
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${DB_USER:-habit_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-habit_tracker}
-      - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    - DATABASE_URL=postgresql+asyncpg://${DB_USER:-habit_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-habit_tracker}
+    - REDIS_URL=redis://redis:6379/0
+    - SECRET_KEY=${SECRET_KEY}
+    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
-      - backend
-      - redis
+    - backend
+    - redis
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - celery -A app.celery_app inspect ping || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
-      - habit-network
+    - habit-network
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "50m"
-        max-file: "5"
-        tag: "{{.Name}}"
-
-  # ============================================
-  # CELERY BEAT (Scheduler)
-  # ============================================
+        max-size: 50m
+        max-file: '5'
+        tag: '{{.Name}}'
   celery-beat:
     build:
       context: ./backend
@@ -136,31 +127,31 @@ services:
     restart: unless-stopped
     command: celery -A app.celery_app beat --loglevel=info
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${DB_USER:-habit_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-habit_tracker}
-      - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY}
+    - DATABASE_URL=postgresql+asyncpg://${DB_USER:-habit_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-habit_tracker}
+    - REDIS_URL=redis://redis:6379/0
+    - SECRET_KEY=${SECRET_KEY}
     depends_on:
-      - backend
-      - redis
+    - backend
+    - redis
     networks:
-      - habit-network
+    - habit-network
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "10m"
-        max-file: "3"
-        tag: "{{.Name}}"
-
-# ============================================
-# VOLUMES
-# ============================================
+        max-size: 10m
+        max-file: '3'
+        tag: '{{.Name}}'
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pgrep -f "celery.*beat" || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 volumes:
-  postgres_data:
-  redis_data:
-
-# ============================================
-# NETWORKS
-# ============================================
+  postgres_data: null
+  redis_data: null
 networks:
   habit-network:
     driver: bridge

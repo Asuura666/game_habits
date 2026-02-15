@@ -37,7 +37,7 @@ async def _aggregate_user_daily_stats(
         select(func.count(Habit.id))
         .where(
             Habit.user_id == user_id,
-            Habit.is_active == True,
+            Habit.is_archived == False,
         )
     )
     result = await session.execute(habits_query)
@@ -48,7 +48,7 @@ async def _aggregate_user_daily_stats(
         select(func.count(Completion.id))
         .where(
             Completion.user_id == user_id,
-            func.date(Completion.completed_at) == target_date,
+            func.date(Completion.created_at) == target_date,
         )
     )
     result = await session.execute(completions_query)

@@ -158,7 +158,7 @@ export default function InventoryPage() {
     setActionLoading(item.id);
     
     try {
-      const response = await fetch(`${API_URL}/inventory/unequip/${item.id}`, {
+      const response = await fetch(`${API_URL}/inventory/unequip/${item.equipped_slot}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
