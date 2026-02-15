@@ -1,7 +1,7 @@
 """
 Celery tasks for notification management.
 """
-import asyncio
+# import asyncio  # Removed - using celery_utils
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -11,20 +11,13 @@ from celery import shared_task
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session_maker
+from app.tasks.celery_utils import get_celery_db_session, run_async
 from app.models.notification import Notification
 from app.models.user import User
 
 logger = structlog.get_logger()
 
 
-def run_async(coro):
-    """Run an async coroutine in a sync context."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
 async def _create_notification(
@@ -49,7 +42,7 @@ async def _create_notification(
     """
     log = logger.bind(user_id=user_id, type=notification_type)
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         # Verify user exists and has notifications enabled
         user_query = select(User).where(User.id == UUID(user_id))
         result = await session.execute(user_query)
@@ -148,7 +141,7 @@ async def _broadcast_notification(
     log = logger.bind(user_count=len(user_ids), type=notification_type)
     log.info("broadcast_started")
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         # Get users with notifications enabled
         users_query = (
             select(User)
@@ -239,7 +232,7 @@ async def _send_streak_warnings() -> dict:
     log = logger.bind(task="streak_warnings")
     log.info("checking_streak_warnings")
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         # Find users who haven't completed anything today
         # and have an active streak
         today = date.today()
@@ -312,7 +305,7 @@ async def _mark_notifications_read(user_id: str, notification_ids: list[str]) ->
     """
     from sqlalchemy import update
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         stmt = (
             update(Notification)
             .where(

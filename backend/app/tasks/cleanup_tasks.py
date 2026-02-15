@@ -1,7 +1,7 @@
 """
 Celery tasks for cleanup and maintenance.
 """
-import asyncio
+# import asyncio  # Removed - using celery_utils
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -10,21 +10,13 @@ from celery import shared_task
 from sqlalchemy import delete, update, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session_maker
+from app.tasks.celery_utils import get_celery_db_session, run_async
 from app.models.notification import Notification
 from app.models.user import User
 from app.models.stats import RateLimit
 
 logger = structlog.get_logger()
 
-
-def run_async(coro):
-    """Run an async coroutine in a sync context."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
 async def _reset_weekly_freeze_async() -> dict:
@@ -40,7 +32,7 @@ async def _reset_weekly_freeze_async() -> dict:
     log = logger.bind(task="reset_weekly_freeze")
     log.info("resetting_weekly_freeze")
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         # Reset streak_freeze_available to 1 for all users
         stmt = (
             update(User)
@@ -95,7 +87,7 @@ async def _cleanup_old_notifications_async(days: int = 30) -> dict:
     
     cutoff_date = datetime.utcnow() - timedelta(days=days)
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         # Delete old read notifications (keep unread a bit longer)
         stmt = delete(Notification).where(
             Notification.created_at < cutoff_date,
@@ -165,7 +157,7 @@ async def _reset_expired_rate_limits_async() -> dict:
     
     now = datetime.utcnow()
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         # Reset expired rate limits
         stmt = (
             update(RateLimit)
@@ -224,7 +216,7 @@ async def _cleanup_cancelled_tasks_async(days: int = 7) -> dict:
     
     cutoff_date = datetime.utcnow() - timedelta(days=days)
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         stmt = delete(Task).where(
             Task.status == "cancelled",
             Task.updated_at < cutoff_date,
@@ -277,7 +269,7 @@ async def _purge_deleted_users_async(days: int = 30) -> dict:
     
     cutoff_date = datetime.utcnow() - timedelta(days=days)
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         # Count users to be deleted
         count_query = (
             select(func.count(User.id))
@@ -349,7 +341,7 @@ async def _vacuum_analyze_async() -> dict:
         "coin_transactions",
     ]
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         for table in tables:
             try:
                 # Note: VACUUM cannot run in a transaction

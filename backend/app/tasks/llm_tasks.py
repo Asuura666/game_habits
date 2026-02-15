@@ -1,7 +1,7 @@
 """
 Celery tasks for LLM-powered task evaluation.
 """
-import asyncio
+# import asyncio  # Removed - using celery_utils
 from uuid import UUID
 
 import structlog
@@ -10,7 +10,7 @@ from celery.exceptions import MaxRetriesExceededError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session_maker
+from app.tasks.celery_utils import get_celery_db_session, run_async
 from app.models.task import Task
 from app.models.user import User
 from app.models.completion import Completion
@@ -21,13 +21,6 @@ from app.tasks.notification_tasks import send_notification
 logger = structlog.get_logger()
 
 
-def run_async(coro):
-    """Run an async coroutine in a sync context."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
 async def _get_user_context(session: AsyncSession, user: User) -> dict:
@@ -139,7 +132,7 @@ async def _evaluate_task_async(task_id: str, user_id: str) -> dict:
     log = logger.bind(task_id=task_id, user_id=user_id)
     log.info("starting_task_evaluation")
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         # Fetch task
         task_query = select(Task).where(Task.id == UUID(task_id))
         result = await session.execute(task_query)
@@ -310,7 +303,7 @@ def evaluate_task_difficulty(self, task_id: str):
     log = logger.bind(task_id=task_id)
     
     async def get_user_id():
-        async with async_session_maker() as session:
+        async with get_celery_db_session() as session:
             task_query = select(Task).where(Task.id == UUID(task_id))
             result = await session.execute(task_query)
             task = result.scalar_one_or_none()

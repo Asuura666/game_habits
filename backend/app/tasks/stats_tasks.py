@@ -1,8 +1,9 @@
 """
 Celery tasks for statistics aggregation.
+
+FIXED: Event loop mismatch issue by using get_celery_db_session().
 """
-import asyncio
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -12,24 +13,15 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session_maker
 from app.models.completion import Completion
 from app.models.habit import Habit
 from app.models.stats import DailyStats
 from app.models.task import Task
 from app.models.transaction import CoinTransaction, XPTransaction
 from app.models.user import User
+from app.tasks.celery_utils import get_celery_db_session, run_async
 
 logger = structlog.get_logger()
-
-
-def run_async(coro):
-    """Run an async coroutine in a sync context."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
 async def _aggregate_user_daily_stats(
@@ -37,17 +29,7 @@ async def _aggregate_user_daily_stats(
     user_id: UUID,
     target_date: date,
 ) -> DailyStats | None:
-    """
-    Aggregate daily stats for a single user.
-    
-    Args:
-        session: Database session
-        user_id: User UUID
-        target_date: Date to aggregate stats for
-        
-    Returns:
-        Created or updated DailyStats
-    """
+    """Aggregate daily stats for a single user."""
     log = logger.bind(user_id=str(user_id), date=str(target_date))
     
     # Count total habits for the day
@@ -138,11 +120,10 @@ async def _aggregate_user_daily_stats(
         xp_earned=xp_earned,
         coins_earned=coins_earned,
         coins_spent=coins_spent,
-        combats_won=0,  # TODO: Aggregate from combat results
+        combats_won=0,
         combats_lost=0,
     )
     
-    # On conflict, update
     stmt = stmt.on_conflict_do_update(
         constraint="uq_daily_stats_user_date",
         set_={
@@ -169,22 +150,14 @@ async def _aggregate_user_daily_stats(
 
 
 async def _aggregate_daily_stats_async(target_date: date | None = None) -> dict:
-    """
-    Aggregate daily stats for all users.
-    
-    Args:
-        target_date: Date to aggregate (defaults to yesterday)
-        
-    Returns:
-        Aggregation results
-    """
+    """Aggregate daily stats for all users."""
     if target_date is None:
         target_date = date.today() - timedelta(days=1)
     
     log = logger.bind(target_date=str(target_date))
     log.info("aggregation_started")
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         # Get all active users
         users_query = select(User.id).where(User.deleted_at.is_(None))
         result = await session.execute(users_query)
@@ -192,7 +165,6 @@ async def _aggregate_daily_stats_async(target_date: date | None = None) -> dict:
         
         log.info("processing_users", user_count=len(user_ids))
         
-        # Aggregate stats for each user
         success_count = 0
         error_count = 0
         
@@ -225,15 +197,7 @@ async def _aggregate_daily_stats_async(target_date: date | None = None) -> dict:
 
 @shared_task
 def aggregate_daily_stats(target_date: str | None = None):
-    """
-    Aggregate daily stats for all users.
-    
-    Should run once per day (configured in celery beat schedule).
-    Aggregates stats from the previous day by default.
-    
-    Args:
-        target_date: Optional date string (YYYY-MM-DD) to aggregate
-    """
+    """Aggregate daily stats for all users."""
     log = logger.bind(task="aggregate_daily_stats")
     
     try:
@@ -252,17 +216,11 @@ def aggregate_daily_stats(target_date: str | None = None):
 
 
 async def _calculate_leaderboard_positions() -> dict:
-    """
-    Calculate and cache leaderboard positions.
-    
-    Returns:
-        Leaderboard update results
-    """
+    """Calculate and cache leaderboard positions."""
     log = logger.bind(task="leaderboard")
     log.info("calculating_leaderboard")
     
-    async with async_session_maker() as session:
-        # Get weekly XP for all public users
+    async with get_celery_db_session() as session:
         week_start = date.today() - timedelta(days=date.today().weekday())
         
         leaderboard_query = (
@@ -304,11 +262,7 @@ async def _calculate_leaderboard_positions() -> dict:
 
 @shared_task
 def calculate_leaderboard():
-    """
-    Calculate and update leaderboard positions.
-    
-    Can be called periodically to refresh cached leaderboard data.
-    """
+    """Calculate and update leaderboard positions."""
     log = logger.bind(task="calculate_leaderboard")
     
     try:
@@ -323,24 +277,13 @@ def calculate_leaderboard():
 
 
 async def _recalculate_user_totals(user_id: str) -> dict:
-    """
-    Recalculate user's total XP and coins from transactions.
-    
-    Used for consistency checks and corrections.
-    
-    Args:
-        user_id: User UUID string
-        
-    Returns:
-        Updated totals
-    """
+    """Recalculate user's total XP and coins from transactions."""
     log = logger.bind(user_id=user_id)
     log.info("recalculating_user_totals")
     
-    async with async_session_maker() as session:
+    async with get_celery_db_session() as session:
         uid = UUID(user_id)
         
-        # Sum all XP transactions
         xp_query = (
             select(func.coalesce(func.sum(XPTransaction.amount), 0))
             .where(XPTransaction.user_id == uid)
@@ -348,7 +291,6 @@ async def _recalculate_user_totals(user_id: str) -> dict:
         result = await session.execute(xp_query)
         total_xp = result.scalar() or 0
         
-        # Sum all coin transactions
         coins_query = (
             select(func.coalesce(func.sum(CoinTransaction.amount), 0))
             .where(CoinTransaction.user_id == uid)
@@ -356,7 +298,6 @@ async def _recalculate_user_totals(user_id: str) -> dict:
         result = await session.execute(coins_query)
         total_coins = result.scalar() or 0
         
-        # Update user
         user_query = select(User).where(User.id == uid)
         result = await session.execute(user_query)
         user = result.scalar_one_or_none()
@@ -391,12 +332,7 @@ async def _recalculate_user_totals(user_id: str) -> dict:
 
 @shared_task
 def recalculate_user_totals(user_id: str):
-    """
-    Recalculate a user's total XP and coins.
-    
-    Args:
-        user_id: User UUID string
-    """
+    """Recalculate a user's total XP and coins."""
     log = logger.bind(user_id=user_id)
     
     try:

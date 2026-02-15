@@ -130,7 +130,7 @@ export default function InventoryPage() {
     setActionLoading(item.id);
     
     try {
-      const response = await fetch(`${API_URL}/inventory/${item.id}/equip`, {
+      const response = await fetch(`${API_URL}/inventory/equip/${item.id}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -158,7 +158,7 @@ export default function InventoryPage() {
     setActionLoading(item.id);
     
     try {
-      const response = await fetch(`${API_URL}/inventory/${item.id}/unequip`, {
+      const response = await fetch(`${API_URL}/inventory/unequip/${item.id}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
