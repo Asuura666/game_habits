@@ -1,125 +1,185 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, X, Calendar, Flag, CheckCircle2, Circle, Trash2, Edit2 } from 'lucide-react';
+import { Plus, X, Loader2, AlertCircle, RefreshCw, CheckCircle2, Circle, Calendar, Sparkles, Coins, Wand2 } from 'lucide-react';
 import { Button, Input, Card, Badge } from '@/components/ui';
+import { useAuthStore } from '@/stores/authStore';
 import { cn, getPriorityColor } from '@/lib/utils';
-import type { Task, TaskPriority } from '@/types';
 
-const initialTasks: Task[] = [
-  {
-    id: '1',
-    userId: '1',
-    title: 'Finir le rapport trimestriel',
-    description: 'Compiler les données Q4 et rédiger le résumé',
-    priority: 'high',
-    dueDate: new Date(Date.now() + 86400000).toISOString(),
-    completed: false,
-    xpReward: 50,
-    goldReward: 20,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    userId: '1',
-    title: 'Rendez-vous dentiste',
-    description: 'Contrôle annuel',
-    priority: 'medium',
-    dueDate: new Date(Date.now() + 172800000).toISOString(),
-    completed: false,
-    xpReward: 20,
-    goldReward: 10,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: '3',
-    userId: '1',
-    title: 'Répondre aux emails',
-    priority: 'low',
-    completed: true,
-    xpReward: 15,
-    goldReward: 5,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: '4',
-    userId: '1',
-    title: 'Préparer la présentation',
-    description: 'Slides pour la réunion de vendredi',
-    priority: 'urgent',
-    dueDate: new Date(Date.now() + 43200000).toISOString(),
-    completed: false,
-    xpReward: 75,
-    goldReward: 30,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+type Priority = 'low' | 'medium' | 'high' | 'urgent';
 
-const priorityLabels: Record<TaskPriority, string> = {
-  low: 'Basse',
-  medium: 'Moyenne',
-  high: 'Haute',
-  urgent: 'Urgente',
-};
+interface TaskResponse {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  priority: Priority;
+  due_date: string | null;
+  completed: boolean;
+  completed_at: string | null;
+  xp_reward: number;
+  coin_reward: number;
+  difficulty: string | null;
+  use_ai_evaluation: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Task {
+  id: string;
+  title: string;
+  description: string;
+  priority: Priority;
+  dueDate: string | null;
+  completed: boolean;
+  xpReward: number;
+  goldReward: number;
+  useAI: boolean;
+}
+
+function transformTask(t: TaskResponse): Task {
+  return {
+    id: t.id,
+    title: t.title,
+    description: t.description || '',
+    priority: t.priority,
+    dueDate: t.due_date,
+    completed: t.completed,
+    xpReward: t.xp_reward,
+    goldReward: t.coin_reward,
+    useAI: t.use_ai_evaluation,
+  };
+}
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [showModal, setShowModal] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
-  const [newTask, setNewTask] = useState({
-    title: '',
-    description: '',
-    priority: 'medium' as TaskPriority,
-    dueDate: '',
-  });
+  const { accessToken, fetchCharacter } = useAuthStore();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [completing, setCompleting] = useState<string | null>(null);
+  
+  // Form state
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState<Priority>('medium');
+  const [dueDate, setDueDate] = useState('');
+  const [useAI, setUseAI] = useState(false);
 
-  const handleComplete = (taskId: string) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId ? { ...t, completed: !t.completed, updatedAt: new Date().toISOString() } : t
-      )
-    );
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://habit.apps.ilanewep.cloud/api';
+
+  const fetchTasks = useCallback(async () => {
+    if (!accessToken) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch(`${API_URL}/tasks/`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+
+      if (!response.ok) throw new Error('Erreur lors du chargement');
+
+      const data: TaskResponse[] = await response.json();
+      setTasks(data.map(transformTask));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken, API_URL]);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accessToken || !title.trim()) return;
+
+    setCreating(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/tasks/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || null,
+          priority,
+          due_date: dueDate || null,
+          use_ai_evaluation: useAI,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'Erreur lors de la création');
+      }
+
+      setTitle('');
+      setDescription('');
+      setPriority('medium');
+      setDueDate('');
+      setUseAI(false);
+      setShowForm(false);
+      await fetchTasks();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const handleDelete = (taskId: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+  const handleComplete = async (taskId: string) => {
+    if (!accessToken || completing) return;
+
+    setCompleting(taskId);
+    try {
+      const response = await fetch(`${API_URL}/tasks/${taskId}/complete`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+
+      if (!response.ok) throw new Error('Erreur');
+      await Promise.all([fetchTasks(), fetchCharacter()]);
+    } catch (err) {
+      setError('Erreur lors de la complétion');
+    } finally {
+      setCompleting(null);
+    }
   };
 
-  const handleAddTask = () => {
-    if (!newTask.title.trim()) return;
+  const handleDelete = async (taskId: string) => {
+    if (!accessToken || !confirm('Supprimer cette tâche ?')) return;
 
-    const task: Task = {
-      id: Date.now().toString(),
-      userId: '1',
-      title: newTask.title,
-      description: newTask.description || undefined,
-      priority: newTask.priority,
-      dueDate: newTask.dueDate || undefined,
-      completed: false,
-      xpReward: { low: 15, medium: 25, high: 50, urgent: 75 }[newTask.priority],
-      goldReward: { low: 5, medium: 10, high: 20, urgent: 30 }[newTask.priority],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setTasks((prev) => [task, ...prev]);
-    setNewTask({ title: '', description: '', priority: 'medium', dueDate: '' });
-    setShowModal(false);
+    try {
+      await fetch(`${API_URL}/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+      await fetchTasks();
+    } catch (err) {
+      setError('Erreur lors de la suppression');
+    }
   };
 
-  const filteredTasks = tasks.filter((task) => {
-    if (filter === 'completed') return task.completed;
-    if (filter === 'pending') return !task.completed;
-    return true;
-  });
+  const pendingTasks = tasks.filter(t => !t.completed);
+  const completedTasks = tasks.filter(t => t.completed);
 
-  const pendingCount = tasks.filter((t) => !t.completed).length;
-  const completedCount = tasks.filter((t) => t.completed).length;
+  const priorityLabels: Record<Priority, string> = {
+    low: 'Basse',
+    medium: 'Moyenne',
+    high: 'Haute',
+    urgent: 'Urgente',
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -127,219 +187,175 @@ export default function TasksPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Mes Tâches</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {pendingCount} en attente • {completedCount} terminées
-          </p>
+          <p className="text-gray-500 mt-1">{pendingTasks.length} en attente • {completedTasks.length} terminée{completedTasks.length > 1 ? 's' : ''}</p>
         </div>
-        <Button onClick={() => setShowModal(true)}>
-          <Plus className="w-5 h-5 mr-2" />
-          Nouvelle tâche
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={fetchTasks} disabled={loading}>
+            <RefreshCw className={loading ? 'animate-spin' : ''} />
+          </Button>
+          <Button onClick={() => setShowForm(!showForm)} className="gap-2">
+            {showForm ? <X /> : <Plus />}
+            {showForm ? 'Annuler' : 'Nouvelle tâche'}
+          </Button>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2">
-        {(['all', 'pending', 'completed'] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-              filter === f
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-            )}
-          >
-            {f === 'all' ? 'Toutes' : f === 'pending' ? 'En attente' : 'Terminées'}
-          </button>
-        ))}
-      </div>
+      {/* Error */}
+      {error && (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600">
+          <AlertCircle className="w-5 h-5" />
+          <p>{error}</p>
+          <button onClick={() => setError(null)} className="ml-auto"><X className="w-4 h-4" /></button>
+        </div>
+      )}
 
-      {/* Tasks List */}
-      <div className="space-y-3">
-        <AnimatePresence mode="popLayout">
-          {filteredTasks.map((task) => (
-            <motion.div
-              key={task.id}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: -100 }}
-            >
-              <Card
-                variant="bordered"
-                className={cn(
-                  'flex items-start gap-4',
-                  task.completed && 'bg-green-50 dark:bg-green-900/20'
-                )}
-              >
-                <button
-                  onClick={() => handleComplete(task.id)}
-                  className={cn(
-                    'mt-1 flex-shrink-0 transition-colors',
-                    task.completed ? 'text-green-500' : 'text-gray-400 hover:text-primary-500'
-                  )}
-                >
-                  {task.completed ? (
-                    <CheckCircle2 className="w-6 h-6" />
-                  ) : (
-                    <Circle className="w-6 h-6" />
-                  )}
-                </button>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3
-                      className={cn(
-                        'font-semibold text-gray-900 dark:text-white',
-                        task.completed && 'line-through text-gray-500'
-                      )}
-                    >
-                      {task.title}
-                    </h3>
-                    <Badge
-                      variant={
-                        task.priority === 'urgent'
-                          ? 'danger'
-                          : task.priority === 'high'
-                          ? 'warning'
-                          : 'default'
-                      }
-                      size="sm"
-                    >
-                      {priorityLabels[task.priority]}
-                    </Badge>
-                  </div>
-
-                  {task.description && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{task.description}</p>
-                  )}
-
-                  <div className="flex items-center gap-4 text-sm">
-                    {task.dueDate && (
-                      <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
-                        <Calendar className="w-4 h-4" />
-                        <span>{new Date(task.dueDate).toLocaleDateString('fr-FR')}</span>
-                      </div>
-                    )}
-                    <span className="text-game-xp">+{task.xpReward} XP</span>
-                    <span className="text-game-gold">+{task.goldReward} 🪙</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleDelete(task.id)}
-                  className="text-gray-400 hover:text-red-500 transition-colors"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </Card>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {filteredTasks.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500 dark:text-gray-400 mb-4">
-              {filter === 'all' ? 'Aucune tâche' : filter === 'pending' ? 'Aucune tâche en attente' : 'Aucune tâche terminée'}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Add Task Modal */}
+      {/* Create Form */}
       <AnimatePresence>
-        {showModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-            onClick={() => setShowModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Card variant="elevated" padding="lg" className="w-full max-w-md bg-white dark:bg-gray-800">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Nouvelle tâche</h2>
-                  <button
-                    onClick={() => setShowModal(false)}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <X className="w-5 h-5 text-gray-500" />
-                  </button>
+        {showForm && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+            <Card>
+              <form onSubmit={handleCreate} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Titre *</label>
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Finir le rapport" required />
                 </div>
 
-                <div className="space-y-4">
-                  <Input
-                    label="Titre"
-                    value={newTask.title}
-                    onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                    placeholder="Ex: Finir le projet"
-                  />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                  <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Détails..." />
+                </div>
 
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Description (optionnel)
-                    </label>
-                    <textarea
-                      value={newTask.description}
-                      onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                      placeholder="Détails de la tâche..."
-                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      rows={3}
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priorité</label>
+                    <select
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value as Priority)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                    >
+                      <option value="low">Basse</option>
+                      <option value="medium">Moyenne</option>
+                      <option value="high">Haute</option>
+                      <option value="urgent">Urgente</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Échéance</label>
+                    <input
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                     />
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                        Priorité
-                      </label>
-                      <select
-                        value={newTask.priority}
-                        onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as TaskPriority })}
-                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      >
-                        <option value="low">Basse</option>
-                        <option value="medium">Moyenne</option>
-                        <option value="high">Haute</option>
-                        <option value="urgent">Urgente</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                        Échéance
-                      </label>
-                      <input
-                        type="date"
-                        value={newTask.dueDate}
-                        onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 pt-4">
-                    <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">
-                      Annuler
-                    </Button>
-                    <Button onClick={handleAddTask} className="flex-1">
-                      <Plus className="w-5 h-5 mr-2" />
-                      Créer
-                    </Button>
-                  </div>
                 </div>
-              </Card>
-            </motion.div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="useAI"
+                    checked={useAI}
+                    onChange={(e) => setUseAI(e.target.checked)}
+                    className="rounded border-gray-300 text-primary-500"
+                  />
+                  <label htmlFor="useAI" className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <Wand2 className="w-4 h-4 text-purple-500" />
+                    Évaluation IA (détermine XP/Or automatiquement)
+                  </label>
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Annuler</Button>
+                  <Button type="submit" disabled={creating || !title.trim()}>
+                    {creating ? <Loader2 className="animate-spin" /> : 'Créer'}
+                  </Button>
+                </div>
+              </form>
+            </Card>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Loading */}
+      {loading && tasks.length === 0 ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+        </div>
+      ) : (
+        <>
+          {/* Pending */}
+          {pendingTasks.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">En attente ({pendingTasks.length})</h2>
+              <div className="space-y-3">
+                {pendingTasks.map((task) => (
+                  <Card key={task.id} className="flex items-start gap-4">
+                    <button
+                      onClick={() => handleComplete(task.id)}
+                      disabled={completing === task.id}
+                      className="mt-1 shrink-0"
+                    >
+                      {completing === task.id ? (
+                        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                      ) : (
+                        <Circle className="w-6 h-6 text-gray-400 hover:text-green-500 transition-colors" />
+                      )}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-gray-900 dark:text-white truncate">{task.title}</h3>
+                        <Badge variant={task.priority === 'urgent' ? 'danger' : task.priority === 'high' ? 'warning' : 'default'} size="sm">
+                          {priorityLabels[task.priority]}
+                        </Badge>
+                        {task.useAI && <Wand2 className="w-4 h-4 text-purple-500" />}
+                      </div>
+                      {task.description && <p className="text-sm text-gray-500 truncate">{task.description}</p>}
+                      <div className="flex items-center gap-4 mt-2 text-sm">
+                        <span className="text-game-xp flex items-center gap-1"><Sparkles className="w-4 h-4" />+{task.xpReward} XP</span>
+                        <span className="text-game-gold flex items-center gap-1"><Coins className="w-4 h-4" />+{task.goldReward}</span>
+                        {task.dueDate && (
+                          <span className="text-gray-500 flex items-center gap-1">
+                            <Calendar className="w-4 h-4" />
+                            {new Date(task.dueDate).toLocaleDateString('fr-FR')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button onClick={() => handleDelete(task.id)} className="text-gray-400 hover:text-red-500">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Completed */}
+          {completedTasks.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-gray-500">Terminées ({completedTasks.length})</h2>
+              <div className="space-y-3 opacity-60">
+                {completedTasks.slice(0, 5).map((task) => (
+                  <Card key={task.id} className="flex items-center gap-4">
+                    <CheckCircle2 className="w-6 h-6 text-green-500 shrink-0" />
+                    <h3 className="font-medium text-gray-500 line-through truncate">{task.title}</h3>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty */}
+          {tasks.length === 0 && !loading && (
+            <div className="text-center py-12">
+              <p className="text-gray-500 mb-4">Aucune tâche pour le moment.</p>
+              <Button onClick={() => setShowForm(true)} className="gap-2">
+                <Plus className="w-5 h-5" /> Créer ma première tâche
+              </Button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
