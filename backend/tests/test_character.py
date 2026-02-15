@@ -102,9 +102,10 @@ class TestCharacterValidation:
         unique_email = f"char_val_{uuid.uuid4().hex[:8]}@test.com"
         response = client.post("/api/auth/register", json={
             "email": unique_email,
-            "username": f"ValTest{uuid.uuid4().hex[:4]}",
+            "username": f"ValTest{uuid.uuid4().hex[:8]}",
             "password": "TestPass123!"
         })
+        assert response.status_code in [200, 201], f"Registration failed: {response.text}"
         return response.json()["access_token"]
 
     def test_name_too_short(self, client: Client, auth_token: str):
@@ -139,14 +140,19 @@ class TestCharacterValidation:
         valid_classes = ["warrior", "mage", "ranger", "paladin", "assassin"]
         
         for char_class in valid_classes:
-            unique_email = f"class_{char_class}_{uuid.uuid4().hex[:4]}@test.com"
+            # Use longer UUIDs to prevent collisions with other tests
+            unique_id = uuid.uuid4().hex[:8]
+            unique_email = f"class_{char_class}_{unique_id}@test.com"
+            unique_username = f"Cls{char_class[:3]}{unique_id}"
             
             # Register new user for each class test
             reg_response = client.post("/api/auth/register", json={
                 "email": unique_email,
-                "username": f"Class{char_class[:4]}{uuid.uuid4().hex[:2]}",
+                "username": unique_username,
                 "password": "TestPass123!"
             })
+            assert reg_response.status_code in [200, 201], \
+                f"Registration failed for {char_class}: {reg_response.text}"
             token = reg_response.json()["access_token"]
             
             # Create character with this class (no underscores allowed in name)
@@ -164,14 +170,16 @@ class TestCharacterStats:
     @pytest.fixture
     def character_with_token(self, client: Client):
         """Create a user with character and return token."""
-        unique_email = f"stat_test_{uuid.uuid4().hex[:8]}@test.com"
+        unique_id = uuid.uuid4().hex[:8]
+        unique_email = f"stat_test_{unique_id}@test.com"
         
         # Register
         reg_response = client.post("/api/auth/register", json={
             "email": unique_email,
-            "username": f"StatTest{uuid.uuid4().hex[:4]}",
+            "username": f"StatTest{unique_id}",
             "password": "TestPass123!"
         })
+        assert reg_response.status_code in [200, 201], f"Registration failed: {reg_response.text}"
         token = reg_response.json()["access_token"]
         
         # Create character
