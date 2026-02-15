@@ -27,7 +27,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       <div className="flex items-center gap-3 lg:hidden">
         <button
           onClick={onMenuClick}
-          className="p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          className="p-2.5 min-h-[44px] min-w-[44px] -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           aria-label="Open menu"
         >
           <Menu className="w-6 h-6 text-gray-600 dark:text-gray-300" />
@@ -70,7 +70,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative"
+            className="p-2.5 min-h-[44px] min-w-[44px] rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative"
           >
             <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
