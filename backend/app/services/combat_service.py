@@ -520,3 +520,228 @@ def get_combat_preview(challenger: "User", defender: "User") -> dict:
             "defender": round((1 - c_win_chance) * 100, 1),
         },
     }
+
+
+# =============================================================================
+# CombatService Class (wrapper for router compatibility)
+# =============================================================================
+
+@dataclass
+class CombatantState:
+    """État d'un combattant pour la simulation."""
+    user_id: UUID
+    username: str
+    character_name: str
+    character_class: str
+    level: int
+    max_hp: int
+    current_hp: int
+    strength: int
+    endurance: int
+    agility: int
+    intelligence: int
+    weapon_bonus: int = 0
+    armor_bonus: int = 0
+    
+    def to_stats_dict(self) -> dict:
+        """Convert to stats dict for storage."""
+        return {
+            "user_id": str(self.user_id),
+            "username": self.username,
+            "name": self.character_name,
+            "class": self.character_class,
+            "level": self.level,
+            "max_hp": self.max_hp,
+            "strength": self.strength,
+            "endurance": self.endurance,
+            "agility": self.agility,
+            "intelligence": self.intelligence,
+        }
+
+
+@dataclass
+class CombatSimulationResult:
+    """Résultat complet d'une simulation de combat."""
+    winner_id: Optional[UUID]
+    is_draw: bool
+    challenger_stats: dict
+    defender_stats: dict
+    challenger_final_hp: int
+    defender_final_hp: int
+    total_turns: int
+    combat_log: list = field(default_factory=list)
+    winner_xp: int = 0
+    winner_coins: int = 0
+    summary: str = ""
+
+
+class CombatService:
+    """Service de combat PvP - wrapper class."""
+    
+    @staticmethod
+    def create_combatant(character, equipment_bonuses: dict) -> CombatantState:
+        """Crée l'état initial d'un combattant."""
+        strength = character.strength + equipment_bonuses.get("strength", 0)
+        endurance = character.endurance + equipment_bonuses.get("endurance", 0)
+        agility = character.agility + equipment_bonuses.get("agility", 0)
+        intelligence = character.intelligence + equipment_bonuses.get("intelligence", 0)
+        
+        max_hp = BASE_HP + (endurance * HP_PER_ENDURANCE)
+        
+        return CombatantState(
+            user_id=character.user_id,
+            username=character.user.username if character.user else "Unknown",
+            character_name=character.name,
+            character_class=character.character_class,
+            level=character.user.level if character.user else 1,
+            max_hp=max_hp,
+            current_hp=max_hp,
+            strength=strength,
+            endurance=endurance,
+            agility=agility,
+            intelligence=intelligence,
+        )
+    
+    @staticmethod
+    def simulate_combat(
+        challenger: CombatantState,
+        defender: CombatantState,
+        bet_coins: int = 0
+    ) -> CombatSimulationResult:
+        """Simule un combat complet."""
+        combat_log = []
+        turn = 0
+        attacker_first = challenger.agility >= defender.agility
+        
+        while turn < MAX_TURNS:
+            turn += 1
+            
+            # Challenger attacks
+            if attacker_first or turn > 1:
+                damage, is_crit, is_dodged = calculate_damage(
+                    CombatStats(
+                        challenger.user_id, challenger.username,
+                        challenger.max_hp, challenger.current_hp,
+                        challenger.strength, challenger.endurance,
+                        challenger.agility, challenger.intelligence,
+                        challenger.weapon_bonus, challenger.armor_bonus
+                    ),
+                    CombatStats(
+                        defender.user_id, defender.username,
+                        defender.max_hp, defender.current_hp,
+                        defender.strength, defender.endurance,
+                        defender.agility, defender.intelligence,
+                        defender.weapon_bonus, defender.armor_bonus
+                    )
+                )
+                
+                if not is_dodged:
+                    defender.current_hp -= damage
+                
+                combat_log.append({
+                    "turn": turn,
+                    "attacker_id": str(challenger.user_id),
+                    "defender_id": str(defender.user_id),
+                    "action": "attack",
+                    "damage_dealt": damage if not is_dodged else 0,
+                    "is_critical": is_crit,
+                    "is_dodge": is_dodged,
+                    "attacker_hp": challenger.current_hp,
+                    "defender_hp": max(0, defender.current_hp),
+                    "message": f"{challenger.username} " + (
+                        f"esquivé par {defender.username}" if is_dodged else
+                        f"CRITIQUE! {damage} dégâts" if is_crit else
+                        f"inflige {damage} dégâts"
+                    ),
+                })
+                
+                if defender.current_hp <= 0:
+                    break
+            
+            # Defender attacks
+            damage, is_crit, is_dodged = calculate_damage(
+                CombatStats(
+                    defender.user_id, defender.username,
+                    defender.max_hp, defender.current_hp,
+                    defender.strength, defender.endurance,
+                    defender.agility, defender.intelligence,
+                    defender.weapon_bonus, defender.armor_bonus
+                ),
+                CombatStats(
+                    challenger.user_id, challenger.username,
+                    challenger.max_hp, challenger.current_hp,
+                    challenger.strength, challenger.endurance,
+                    challenger.agility, challenger.intelligence,
+                    challenger.weapon_bonus, challenger.armor_bonus
+                )
+            )
+            
+            if not is_dodged:
+                challenger.current_hp -= damage
+            
+            combat_log.append({
+                "turn": turn,
+                "attacker_id": str(defender.user_id),
+                "defender_id": str(challenger.user_id),
+                "action": "attack",
+                "damage_dealt": damage if not is_dodged else 0,
+                "is_critical": is_crit,
+                "is_dodge": is_dodged,
+                "attacker_hp": defender.current_hp,
+                "defender_hp": max(0, challenger.current_hp),
+                "message": f"{defender.username} " + (
+                    f"esquivé par {challenger.username}" if is_dodged else
+                    f"CRITIQUE! {damage} dégâts" if is_crit else
+                    f"inflige {damage} dégâts"
+                ),
+            })
+            
+            if challenger.current_hp <= 0:
+                break
+            
+            attacker_first = True
+        
+        # Determine winner
+        winner_id = None
+        is_draw = False
+        
+        if challenger.current_hp <= 0 and defender.current_hp <= 0:
+            is_draw = True
+        elif defender.current_hp <= 0:
+            winner_id = challenger.user_id
+        elif challenger.current_hp <= 0:
+            winner_id = defender.user_id
+        else:
+            c_pct = challenger.current_hp / challenger.max_hp
+            d_pct = defender.current_hp / defender.max_hp
+            if c_pct > d_pct:
+                winner_id = challenger.user_id
+            elif d_pct > c_pct:
+                winner_id = defender.user_id
+            else:
+                is_draw = True
+        
+        # Calculate rewards
+        winner_xp = BASE_XP_WIN if winner_id else 0
+        winner_coins = (BASE_COINS_WIN + bet_coins) if winner_id else 0
+        
+        if is_draw:
+            summary = "Match nul !"
+        elif winner_id == challenger.user_id:
+            summary = f"{challenger.username} gagne en {turn} tours !"
+        else:
+            summary = f"{defender.username} gagne en {turn} tours !"
+        
+        return CombatSimulationResult(
+            winner_id=winner_id,
+            is_draw=is_draw,
+            challenger_stats=challenger.to_stats_dict(),
+            defender_stats=defender.to_stats_dict(),
+            challenger_final_hp=max(0, challenger.current_hp),
+            defender_final_hp=max(0, defender.current_hp),
+            total_turns=turn,
+            combat_log=combat_log,
+            winner_xp=winner_xp,
+            winner_coins=winner_coins,
+            summary=summary,
+        )
